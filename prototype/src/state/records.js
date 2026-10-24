@@ -1,5 +1,9 @@
-const sessionKeys = ['title','agent','model','workspaceId','workspaceSnapshot','agentSettingsSnapshot','ruleVersion','messages','context','sessionArchived','date','status'];
+const sessionKeys = ['title','agent','model','workspaceId','workspaceSnapshot','agentSettingsSnapshot','ruleVersion','messages','context','sessionArchived','date','status','runtime'];
 const pick = (value, keys) => Object.fromEntries(keys.filter(k => value[k] !== undefined).map(k => [k, value[k]]));
+export function pendingRun(row, id) {
+  const previous=row.runtime?.agent===row.agent&&row.runtime.status!=='handedOff'?row.runtime:{};
+  return {...previous,id,sessionId:row.id,agent:row.agent,status:'starting',text:'',events:[],error:'',startedAt:new Date().toISOString()};
+}
 export function seedRecords(rows) {
   return { tasks: rows.map(({ messages, ...task }) => task), sessions: rows.filter(r => r.messages?.length).map(r => ({ ...pick(r, sessionKeys), id: 'session-' + r.id, taskId: r.id })) };
 }

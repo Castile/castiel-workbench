@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { LocalStore } from '../desktop/store.mjs';
 import { decodeDocument, encodeDocument } from '../src/state/document.js';
-import { seedRecords, addRecords, presentRecords, updateRecord } from '../src/state/records.js';
+import { seedRecords, addRecords, presentRecords, updateRecord, pendingRun } from '../src/state/records.js';
 import { PersistenceEngine } from '../src/state/engine.js';
 import { assetPath } from '../desktop/assets.mjs';
 
@@ -109,4 +109,15 @@ test('custom protocol cannot expose files outside the bundled renderer or anothe
   assert.throws(() => assetPath('castiel://app/%2e%2e%2fsecret', '/bundle'));
   assert.throws(() => assetPath('castiel://other/index.html', '/bundle'));
   assert.throws(() => assetPath('https://app/index.html', '/bundle'));
+});
+test('continuous streaming changes still reach disk before the stream ends',async()=>{
+ let saved=0;const engine=new PersistenceEngine({save:async()=>({revision:++saved})});
+ for(let i=0;i<18;i++){engine.set('stream',String(i));await new Promise(r=>setTimeout(r,100));}
+ assert.ok(saved>=1);await engine.flush();assert.equal(engine.dirty,false);
+});
+test('handoff cannot reuse another tool backend ID even during the save-before-send phase',()=>{
+  const runtime={agent:'Claude',externalId:'claude-backend',cwd:'/local',status:'completed'};
+  assert.equal(pendingRun({id:'chat',agent:'Codex',runtime},'request').externalId,undefined);
+  assert.equal(pendingRun({id:'chat',agent:'Claude',runtime},'request').externalId,'claude-backend');
+  assert.equal(pendingRun({id:'chat',agent:'Claude',runtime:{...runtime,status:'handedOff'}},'request').externalId,undefined);
 });

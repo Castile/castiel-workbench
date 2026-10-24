@@ -14,7 +14,7 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Local storage and cache; model inference follows configured tools and may use cloud models.
 - Keep selected task execution layout and common light/dark/system themes across all pages.
 - Agent handoff and agent switching share the composer Agent selector. Adjacent model selector is task-scoped and defaults to tool settings.
-- Continue authorized work autonomously without requesting page-by-page confirmation. Desktop implementation is now authorized; preserve the confirmed UI while adding real capabilities. Real Agent execution remains a separate integration milestone.
+- Continue authorized work autonomously without requesting page-by-page confirmation. Desktop implementation is now authorized; preserve the confirmed UI while adding real capabilities. Desktop Codex/Claude Code integration is now authorized and implemented; keep unimplemented orchestration distinct from real tool turns.
 - Prototype must explicitly distinguish simulated Agent/validation/release state from real execution; do not publish or upload user data.
 
 ## Agent home and sessions refinement, 2026-10-23
@@ -47,4 +47,14 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Native first launch starts with empty tasks/sessions and one local user. Browser preview retains fictional demo data. Keep demo execution explicitly labeled in both modes.
 - Persist tasks and sessions as separate collections. Ordinary Agent chats never create task or team workload entries. Renaming a linked session does not rename its task.
 - Working data uses a versioned local document, atomic replacement and one previous revision backup. Failed saves and recovery must remain visible; do not silently replace unreadable or newer-version data.
-- Do not persist provider credentials in workbench JSON. Model and command fields are configuration placeholders until a real adapter is implemented.
+- Do not persist provider credentials in workbench JSON. Native Codex/Claude use automatic discovery and existing tool credentials. Renderer never receives a full config or environment; arbitrary custom command strings are not executed.
+
+
+## Local Agent integration, 2026-10-25
+
+- On application/window startup, detect installed Codex and Claude Code and load only safe metadata. Preserve independently disabled tools, allowed workspace lists and per-Agent defaults. Never copy auth files or provider secrets into workbench JSON.
+- Native Agent conversations use real adapters; browser demo and daily orchestration remain explicitly simulated. A loaded configuration is not proof of working inference or sufficient provider balance.
+- Codex uses app-server stdio with account/config/model reads, thread resume, turn streaming and interruption. Claude uses the existing CLI with stream-json and explicit backend session resume. Do not add permission bypass flags.
+- Persist run IDs, backend IDs, scope, output and status. Guard against stale events overwriting a new send or tool handoff; stop-before-start must prevent a delayed invocation. Long streams must not postpone saving indefinitely.
+- An unbound workspace uses an application-owned directory, never the user's whole home or this source repo. Existing sessions retain their scope snapshot. Changes in defaults apply to new sessions.
+- Active runs block backup restore and require stopping before window close; this version does not claim closed-window background execution or production process recovery.

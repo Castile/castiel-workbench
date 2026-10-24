@@ -216,3 +216,16 @@ The following supersedes earlier statements that native packaging and all busine
 - Test data and backup stayed under `/private/tmp/castiel-desktop-smoke-20261025` and `/private/tmp/Castiel-desktop-smoke-backup-20261025.json`, outside Git. Final normal launches use the Application Support directory described in README.
 
 Limits: backend corruption/disk failure tests use controlled fixtures, not physical disk exhaustion or power-loss testing. No real model request, Agent execution, production update, encryption, cross-device sync or sleep/resume execution was validated. Team week planning and daily parsing still use prototype rules pending the real scheduler milestone.
+
+## Local Agent integration — 2026-10-25
+
+This supersedes the desktop milestone's unconnected-Agent limit. Browser execution and daily orchestration remain demonstrations.
+
+- `npm run check` passed: production build, 36 business/storage/runtime tests and 4 static packaging tests (40 total). New coverage includes safe discovery summaries, stdin prompt handling, streaming deduplication, real subprocess stop, permission denials, invalid models, archived sessions, cancellation before launch, owned workspace paths, Codex RPC streaming/resume/interrupt, one-time approval constraints, planning mode, parallel limits, missing-rollout recovery, save during long streams and cross-tool backend-ID isolation. Provider success is not inferred from these fixtures.
+- Real Codex returned the requested connection reply. In the native app a new verification conversation received a reply, was saved, quit normally, and reopened from the same isolated data directory. A follow-up returned the prior codeword with the same backend thread ID. Local saved records confirmed real completed output. Ordinary chats did not create tasks.
+- Real Claude loaded the local custom-provider model, but its service returned `402 Insufficient Balance`. This is a verified failure, not working Claude inference. The adapter preserves the diagnostic and does not change credentials, provider or permissions.
+- Native startup showed the loaded tool state and actual model choices; same-session continuation was exercised. Later recovery/concurrency/handoff changes were covered by the final automated checks. The final 0.2.0 package was rebuilt after the earlier process had exited; its desktop modules were compared byte-for-byte with source, and strict deep ad-hoc signature verification passed.
+- The final package was launched using the normal Application Support directory. Its existing one session was retained and task count remained zero. No old input was automatically sent. Isolated integration data, generated apps, logs and user records remain outside Git.
+- The native accessibility verification bridge became unavailable during final recapture, so no new final-package screenshot or fresh responsive/theme audit is claimed. The established layout/theme design was preserved; earlier native interaction evidence and current build/runtime checks are distinct.
+
+Remaining limits: Claude interactive permission host, full artifact collection, automatic code validation, durable scheduling and closed-window execution are not implemented. A tool turn completing is not task acceptance. See `../docs/agent-integration.md` for protocol and data boundaries.

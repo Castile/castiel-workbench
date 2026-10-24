@@ -13,10 +13,12 @@ export class PersistenceEngine {
     if (this.api && !this.recovered) {
       this.status = 'pending'; this.emit(); clearTimeout(this.timer);
       this.timer = setTimeout(() => this.flush().catch(() => {}), 220);
+      this.maxTimer ??= setTimeout(() => this.flush().catch(() => {}), 1500);
     }
   }
   async flush() {
     clearTimeout(this.timer);
+    clearTimeout(this.maxTimer); this.maxTimer = null;
     if (!this.api) return;
     if (!this.dirty) return;
     if (this.recovered) throw new Error('确认恢复备份后才可继续保存');

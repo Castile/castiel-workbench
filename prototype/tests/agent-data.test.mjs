@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {agentDefaults,getAgentModels,hasSession,initialSpaces,taskSpace} from '../src/agentData.js';
+import {agentDefaults,getAgentModels,hasSession,initialSpaces,taskSpace,mergeDiscoveredAgents} from '../src/agentData.js';
 
 test('separate agent defaults keep model and allowed spaces independent',()=>{
  const codex={defaultModel:'coding',defaultSpace:'personal',workspaceIds:['payments','personal']};
@@ -26,4 +26,12 @@ test('session inventory excludes unstarted tasks and keeps workspace independent
  assert.equal(hasSession({messages:[{text:'existing'}]}),true);
  assert.equal(taskSpace({workspaceId:'research',projectId:'payments'}),'research');
  assert.equal(taskSpace({projectId:'payments'}),'');
+});
+test('auto-discovery adds installed tools without overriding independent user settings',()=>{
+ const original={Codex:{enabled:false,defaultModel:'my-model',workspaceIds:['personal']}};
+ const catalog={agents:{Codex:{installed:true},Claude:{installed:true}}};
+ const next=mergeDiscoveredAgents(original,catalog,initialSpaces);
+ assert.equal(next.Codex,original.Codex);assert.equal(next.Claude.defaultModel,'system');assert.deepEqual(next.Claude.workspaceIds,['payments']);
+ assert.equal(mergeDiscoveredAgents(next,catalog,initialSpaces),next);
+ assert.equal(mergeDiscoveredAgents({},catalog,initialSpaces).Gemini,undefined);
 });

@@ -12,6 +12,16 @@ contextBridge.exposeInMainWorld('castielDesktop', Object.freeze({
   importBackup: revision => invoke('storage:import', revision),
   restoreBackup: () => invoke('storage:restore'),
   chooseDirectory: () => invoke('workspace:choose-directory'),
+  agentState: () => invoke('agents:state'),
+  detectAgents: () => invoke('agents:detect'),
+  startAgent: args => invoke('agents:start', args),
+  stopAgent: (sessionId, requestId) => invoke('agents:stop', sessionId, requestId),
+  answerAgent: answer => invoke('agents:answer', answer),
+  onAgentEvent: callback => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('agents:event', listener);
+    return () => ipcRenderer.removeListener('agents:event', listener);
+  },
   completeClose: (token, ok) => invoke('lifecycle:complete-close', token, ok),
   onFlushRequest: callback => {
     const listener = (_event, token) => callback(token);
