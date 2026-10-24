@@ -14,7 +14,7 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Local storage and cache; model inference follows configured tools and may use cloud models.
 - Keep selected task execution layout and common light/dark/system themes across all pages.
 - Agent handoff and agent switching share the composer Agent selector. Adjacent model selector is task-scoped and defaults to tool settings.
-- Continue the full design autonomously without requesting page-by-page confirmation. Keep changes within frontend design/prototyping; desktop technology selection and real integrations are later work.
+- Continue authorized work autonomously without requesting page-by-page confirmation. Desktop implementation is now authorized; preserve the confirmed UI while adding real capabilities. Real Agent execution remains a separate integration milestone.
 - Prototype must explicitly distinguish simulated Agent/validation/release state from real execution; do not publish or upload user data.
 
 ## Agent home and sessions refinement, 2026-10-23
@@ -40,3 +40,11 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Wide desktop navigation is 232px; the launcher max-width is 960px. Use 44px home display type, 34px page headings, 22px section headings, 15–17px body text and 13–14px secondary/control text. Scale intentionally by role rather than applying CSS zoom.
 - Use local system fonts with Chinese fallback, restrained indigo accents, legible neutral text, consistent 8–20px corner radii and measured spacing. No remote font dependency or decorative illustration is required.
 - Dense columns collapse as windows narrow; Sessions remains a primary entry when the execution sibling-session column is hidden. Preserve keyboard focus and context-drawer dismissal.
+
+## Desktop implementation, 2026-10-25
+
+- Electron main process owns local disk writes. Renderer uses a small context-isolated preload API; do not expose arbitrary filesystem, shell, IPC or network operations.
+- Native first launch starts with empty tasks/sessions and one local user. Browser preview retains fictional demo data. Keep demo execution explicitly labeled in both modes.
+- Persist tasks and sessions as separate collections. Ordinary Agent chats never create task or team workload entries. Renaming a linked session does not rename its task.
+- Working data uses a versioned local document, atomic replacement and one previous revision backup. Failed saves and recovery must remain visible; do not silently replace unreadable or newer-version data.
+- Do not persist provider credentials in workbench JSON. Model and command fields are configuration placeholders until a real adapter is implemented.

@@ -1,6 +1,6 @@
 # Design QA
 
-final result: passed
+final result: passed (design prototype); desktop milestone evidence is appended below
 
 ## Reference and captured evidence
 
@@ -200,3 +200,19 @@ Full-view comparison inputs: `design/polish-home-comparison.png`, `design/polish
 Implementation checklist: role-specific scale applied across modules; contrast fixes recaptured; desktop/narrow/theme interactions checked; viewport override reset; local preview retained; design decisions recorded in AGENTS.md and the visual specification.
 
 final result: passed
+
+
+## Desktop milestone — 2026-10-25
+
+The following supersedes earlier statements that native packaging and all business persistence are unimplemented. Browser preview remains an in-memory demo. Electron desktop uses real local files; real Agent/model execution remains unconnected.
+
+- `npm run check`: production build, 23 business/storage tests and 4 static packaging tests passed (27 total). Tests cover reopen/backup, stale concurrent writes, corruption protection, unknown schema, unsaved export, simulated write failure/retry, task/session separation and protocol path restrictions.
+- Official Electron 45.0.0 darwin-arm64 runtime was SHA256 verified; @electron/packager generated a local asar application with ad-hoc signature. No external publication or Apple notarization.
+- Native app started from the packaged `.app` without a Vite server dependency. Found and fixed an ESM entry deadlock by registering the readiness continuation without top-level waiting for ready.
+- Native UI verified fresh empty launch, explicit unconnected status, creating an independent session, deep theme selection, normal Cmd+Q exit and re-opening the same isolated directory. All three sessions and dark theme restored; tasks remained zero. Backup and primary used local files, primary mode 0600.
+- `design/desktop-sessions-restored.png` captures only the developer verification session through a search filter, after restart. Native window title bar, dark theme, unconnected state and real saved indicator are visible. No user conversation contents are committed.
+- Native export dialog produced a schema v1 backup containing three sessions and theme. Import selected this same isolated backup, showed an explicit replacement dialog, restored it and reloaded successfully. Previous document remained in `.bak`.
+- Native file chooser automation required real typing to trigger macOS path completion; setting an AX value alone did not trigger it. This was an automation interaction issue, not an application storage failure.
+- Test data and backup stayed under `/private/tmp/castiel-desktop-smoke-20261025` and `/private/tmp/Castiel-desktop-smoke-backup-20261025.json`, outside Git. Final normal launches use the Application Support directory described in README.
+
+Limits: backend corruption/disk failure tests use controlled fixtures, not physical disk exhaustion or power-loss testing. No real model request, Agent execution, production update, encryption, cross-device sync or sleep/resume execution was validated. Team week planning and daily parsing still use prototype rules pending the real scheduler milestone.

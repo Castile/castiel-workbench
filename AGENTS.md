@@ -6,7 +6,7 @@
 - Existing frontend lives in `prototype/`. Follow `prototype/AGENTS.md` for its confirmed interaction and visual decisions. Do not recreate or scaffold over it.
 - Keep Project absent from primary navigation. Agent workspaces have independent identities and local paths; never derive them from project IDs or automatically assign a project when starting a session.
 - Preserve independent Agent configuration, the primary Sessions entry, quick prompt draft filling, and shared light/dark themes.
-- Frontend React/Vite is a prototype choice, not a settled native desktop architecture. Select native storage, process management and packaging through the subsequent implementation work.
+- Desktop milestone uses Electron with the existing React/Vite frontend. Native entry points and local storage live in `prototype/desktop/`; architecture and limitations are documented in `docs/desktop-architecture.md`.
 
 ## Execution and methodology
 
@@ -20,6 +20,7 @@
 ## Development and validation
 
 - Use root `npm run dev` to run the local preview and `npm run check` for the current full baseline validation.
+- Use `npm run dev:desktop` for a built native development window and `npm run desktop:package` for a local application bundle. Keep generated `release/` artifacts out of Git.
 - Keep dependency changes in `prototype/package.json` and its lockfile. Root package scripts only delegate development commands.
 - Preserve `.openai/hosting.json`, `worker/index.js`, packaging scripts and their tests inside `prototype/`.
 - Run checks relevant to each change. For visual work, inspect the running UI and responsive/theme states; a passing build alone does not verify layout.

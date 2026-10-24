@@ -1,0 +1,6 @@
+.storage-status{position:fixed;bottom:8px;right:16px;z-index:90;display:flex;align-items:center;gap:12px;padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--muted);font-size:12px;max-width:calc(100% - 32px)}
+.storage-status.saved,.storage-status.pending,.storage-status.saving{pointer-events:none}
+.storage-status.error,.storage-status.recovery{top:12px;bottom:auto;left:50%;right:auto;transform:translateX(-50%);width:max-content;max-width:90%;background:var(--bg);box-shadow:var(--shadow);padding:14px 18px;color:var(--text);flex-wrap:wrap}
+.storage-status.error>span,.storage-status.recovery>span{color:#b16219;font-weight:600}
+.storage-status small{font-size:13px}.storage-status button{font-size:13px;color:var(--blue);border:1px solid var(--border);padding:7px 12px;border-radius:7px}
+.storage-gate{max-width:660px;margin:15vh auto;padding:40px;font-family:inherit;line-height:1.9}.storage-gate h1{font-size:28px}.storage-gate button{border:1px solid var(--border);padding:12px 18px;border-radius:8px;color:var(--blue);margin-top:18px}

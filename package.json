@@ -13,6 +13,9 @@
     "preview": "npm --prefix prototype run preview -- --host 127.0.0.1 --port 4174 --strictPort",
     "test": "npm --prefix prototype test",
     "test:package": "npm --prefix prototype run test:sites",
-    "check": "npm run build && npm test && npm run test:package"
+    "check": "npm run build && npm test && npm run test:package",
+    "dev:desktop": "npm --prefix prototype run desktop:dev",
+    "desktop:start": "npm --prefix prototype run desktop:start",
+    "desktop:package": "npm --prefix prototype run desktop:package"
   }
 }

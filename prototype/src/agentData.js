@@ -6,5 +6,5 @@ export const modelCatalog={
 export const initialSpaces=[{id:'payments',name:'支付工作空间',path:''},{id:'admin',name:'管理后台空间',path:''},{id:'personal',name:'个人空间',path:''}];
 export const getAgentModels=name=>modelCatalog[name]||[['system','系统默认','由该工具配置决定']];
 export function agentDefaults(config={},spaces=[]){const ids=config.workspaceIds||spaces.map(s=>s.id),available=spaces.filter(s=>ids.includes(s.id));return {model:config.defaultModel||'system',workspaceId:available.some(s=>s.id===config.defaultSpace)?config.defaultSpace:available[0]?.id||'',spaces:available};}
-export const hasSession=t=>Boolean(t.sessionKind==='agent'||t.messages?.length>0);
+export const hasSession=t=>Boolean(t.sessionKind==='agent'||t.sessionId||t.messages?.length>0);
 export const taskSpace=t=>t.workspaceId||'';
