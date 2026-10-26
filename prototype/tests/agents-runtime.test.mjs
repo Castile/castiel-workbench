@@ -7,6 +7,7 @@ import { AgentRuntime } from '../desktop/agents.mjs';
 import { CodexRPC } from '../desktop/rpc.mjs';
 import { LocalStore } from '../desktop/store.mjs';
 import { claudeSummary, findCLI, modelName, redactError } from '../desktop/discovery.mjs';
+import { rebindConversationWorkspace } from '../src/state/conversation-workspaces.js';
 
 async function until(check) { const end=Date.now()+4000; while(!check()){if(Date.now()>end)throw new Error('fixture timeout');await new Promise(r=>setTimeout(r,10));} }
 async function fixture(t, agent='Claude', mode='success') {
@@ -155,4 +156,16 @@ test('parallel Codex requests remain answerable in order and stopping clears all
   assert.equal(run.status,'running');assert.equal(run.request,undefined);assert.deepEqual(sent[1].result,{answers:{q:{answers:['A\nAdditional detail']}}});
   runtime.codexMessage({id:3,method:'item/fileChange/requestApproval',params:{threadId:'thread'}});
   await runtime.stop('chat');assert.equal(runtime.pending.size,0);assert.equal(run.request,undefined);assert.equal(run.requests,undefined);
+});
+test('changed conversation directory is used by the CLI without resuming its previous backend session',async t=>{
+  const {runtime,store,directory}=await fixture(t);
+  await runtime.start({sessionId:'chat',prompt:'first'});await until(()=>runtime.runs.get('chat').status==='completed');
+  const doc=await store.read(store.file);doc.data.records.sessions[0].runtime=runtime.snapshot().runs[0];
+  const target=path.join(directory,'chosen-folder');await fs.mkdir(target);
+  doc.data.records=rebindConversationWorkspace(doc.data.records,'chat',{id:'chosen',name:'chosen',path:target});
+  await store.save(doc.data,doc.revision);
+  const argsFile=path.join(directory,'arguments.json');runtime.env.CASTIEL_FIXTURE_ARGS=argsFile;
+  await runtime.start({sessionId:'chat',prompt:'second'});await until(()=>runtime.runs.get('chat').status==='completed');
+  assert.equal(runtime.runs.get('chat').cwd,await fs.realpath(target));
+  assert.equal(JSON.parse(await fs.readFile(argsFile,'utf8')).includes('--resume'),false);
 });

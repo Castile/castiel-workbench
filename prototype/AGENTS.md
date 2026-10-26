@@ -66,3 +66,9 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Questions are inline, explicit-submit cards with described single choices, free text, optional notes and multi-question navigation. Never pre-submit a recommended option. Preserve input after failure, mask sensitive fields and keep arbitrary option labels independent of internal answer mode. Multiple backend requests must remain answerable in order.
 - Follow output only while near the bottom; scrolling into history keeps the reading position and reveals Return to latest. Composer grows for multiline text and shrinks after sending. Icon-only navigation must retain accessible names.
 - Test-only component scenarios live in `tests/chat-fixture.html` and are excluded from the production build. Keep scenario results distinct from real Agent calls.
+
+## Conversation workspaces bugfix, 2026-10-26
+
+- Conversation composer workspace control must allow choosing a local directory using the existing native chooser, or selecting an enabled workspace. The user explicitly allows rebinding the current idle, unarchived conversation: retain messages/draft, snapshot the new directory and invalidate the old backend session. Global workspace/default edits still never silently migrate other conversations.
+- One workspace can contain many independent conversations. The sibling-list plus button creates a blank conversation in the current scope, never a task; it must not invoke a model until the first actual send. Empty conversations remain visible in Sessions and restore after restart.
+- Directory registration reuses an existing matching canonical path, adds access only to the choosing Agent and keeps defaults/disabled states unchanged. Cancelling the chooser or dialog has no durable side effect. Starting a new conversation does not clone another conversation's messages or backend thread ID.
