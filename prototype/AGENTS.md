@@ -58,3 +58,11 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Persist run IDs, backend IDs, scope, output and status. Guard against stale events overwriting a new send or tool handoff; stop-before-start must prevent a delayed invocation. Long streams must not postpone saving indefinitely.
 - An unbound workspace uses an application-owned directory, never the user's whole home or this source repo. Existing sessions retain their scope snapshot. Changes in defaults apply to new sessions.
 - Active runs block backup restore and require stopping before window close; this version does not claim closed-window background execution or production process recovery.
+
+## Conversation refinement, 2026-10-26
+
+- Conversation uses a centered reading column: user turns align right in a subdued bubble; Agent replies use an open Markdown surface with official tool marks. Keep task context in an explicit drawer so the conversation can use the available width. Sessions and per-Agent defaults remain independent.
+- Render GFM and highlighted fenced code locally, including unknown-language/partial fences. Copy original text, never highlighted markup. Never execute Markdown HTML or automatically load remote images. External links require an explicit click and native URL validation; only write selected text through the bounded native clipboard method, never expose clipboard reads.
+- Questions are inline, explicit-submit cards with described single choices, free text, optional notes and multi-question navigation. Never pre-submit a recommended option. Preserve input after failure, mask sensitive fields and keep arbitrary option labels independent of internal answer mode. Multiple backend requests must remain answerable in order.
+- Follow output only while near the bottom; scrolling into history keeps the reading position and reveals Return to latest. Composer grows for multiline text and shrinks after sending. Icon-only navigation must retain accessible names.
+- Test-only component scenarios live in `tests/chat-fixture.html` and are excluded from the production build. Keep scenario results distinct from real Agent calls.

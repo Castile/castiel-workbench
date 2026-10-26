@@ -27,3 +27,7 @@ Thumbs.db
 # Desktop build output and staging
 /release/
 prototype/.desktop-stage-*/
+
+# Local browser verification sessions
+.playwright-cli/
+output/

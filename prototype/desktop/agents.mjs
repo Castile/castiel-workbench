@@ -85,7 +85,7 @@ export class AgentRuntime {
     if (run.agent === 'Claude' && /\b402\b|Insufficient Balance/i.test(run.error)) run.error = '本机 Claude 配置的服务余额不足（402），请检查当前服务账户后重试。\n' + run.error;
     run.completedAt = stamp();
     for (const [token, pending] of this.pending) if (pending.run === run) this.pending.delete(token);
-    delete run.request; this.publish(run);
+    delete run.request; delete run.requests; this.publish(run);
   }
   start(args) { const next = this.startQueue.then(() => this.prepareStart(args)); this.startQueue = next.catch(() => {}); return next; }
   async prepareStart({ sessionId, prompt, requestId }) {
@@ -156,7 +156,8 @@ export class AgentRuntime {
       const kind = { 'item/commandExecution/requestApproval': 'command', 'item/fileChange/requestApproval': 'files', 'item/tool/requestUserInput': 'questions' }[message.method];
       if (!kind || p.grantRoot) { this.note(run, '工具请求暂不支持，未扩大权限：' + message.method); return this.rpc?.send({ id: message.id, error: { code: -32601, message: 'Unsupported request; permission was not granted' } }); }
       const token = randomUUID(); this.pending.set(token, { run, id: message.id, kind, questions: p.questions });
-      run.request = { token, kind, command: redactError(p.command || '', this.redactionEnv), cwd: p.cwd || run.cwd, reason: redactError(p.reason || '', this.redactionEnv), questions: p.questions || [] };
+      run.requests = [...(run.requests || []), { token, kind, command: redactError(p.command || '', this.redactionEnv), cwd: p.cwd || run.cwd, reason: redactError(p.reason || '', this.redactionEnv), questions: p.questions || [] }];
+      run.request = run.requests[0];
       run.status = 'waiting'; this.publish(run); return;
     }
     if (!run) return;
@@ -174,10 +175,14 @@ export class AgentRuntime {
     let result;
     if (pending.kind === 'questions') {
       const values = {};
-      for (const q of pending.questions) { const value = answers[q.id]; if (typeof value !== 'string' || value.length > 4000) throw new Error('请回答所有问题'); values[q.id] = { answers: [value] }; }
+      for (const q of pending.questions) { const value = answers[q.id]; if (typeof value !== 'string' || !value.trim() || value.length > 4000) throw new Error('请回答所有问题（每题最多 4000 字符）'); values[q.id] = { answers: [value] }; }
       result = { answers: values };
     } else { if (!['accept', 'decline'].includes(decision)) throw new Error('无效的授权选择'); result = { decision }; }
-    this.rpc.send({ id: pending.id, result }); this.pending.delete(token); delete pending.run.request; pending.run.status = 'running'; this.publish(pending.run);
+    this.rpc.send({ id: pending.id, result }); this.pending.delete(token);
+    pending.run.requests = (pending.run.requests || []).filter(r => r.token !== token);
+    pending.run.request = pending.run.requests[0];
+    if (!pending.run.requests.length) { delete pending.run.requests; delete pending.run.request; }
+    pending.run.status = pending.run.request ? 'waiting' : 'running'; this.publish(pending.run);
   }
   async claudeRun(run, { text, instructions, planning, model, executable }) {
     const args = ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--append-system-prompt', instructions];
@@ -225,7 +230,7 @@ export class AgentRuntime {
     run.status = 'stopping';
     if (run.agent === 'Codex') {
       for (const [token, pending] of this.pending) if (pending.run === run) { this.rpc?.send({ id: pending.id, error: { code: -32800, message: 'Cancelled by user' } }); this.pending.delete(token); }
-      delete run.request;
+      delete run.request; delete run.requests;
       if (run.externalId && run.turnId) {
         try { await this.rpc.request('turn/interrupt', { threadId: run.externalId, turnId: run.turnId }); }
         catch (error) { run.status = 'running'; this.note(run, '停止请求尚未确认，请重试'); throw error; }

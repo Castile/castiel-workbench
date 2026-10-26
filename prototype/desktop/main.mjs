@@ -1,11 +1,11 @@
-import { app, BrowserWindow, ipcMain, protocol, session, dialog, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, session, dialog, Menu, shell, clipboard } from 'electron';
 import fs from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { LocalStore } from './store.mjs';
-import { assetPath } from './assets.mjs';
+import { assetPath, externalURL } from './assets.mjs';
 import { encodeDocument } from '../src/state/document.js';
 import { AgentRuntime } from './agents.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -53,6 +53,11 @@ else {
   handle('agents:start', args => runtime.start(args));
   handle('agents:stop', (sessionId, requestId) => runtime.stop(sessionId, requestId));
   handle('agents:answer', answer => runtime.answer(answer));
+  handle('links:open', value => shell.openExternal(externalURL(value)));
+  handle('clipboard:write', text => {
+    if (typeof text !== 'string' || text.length > 2 * 1024 * 1024) throw new Error('复制内容无效或过大');
+    clipboard.writeText(text);
+  });
   handle('storage:save', (data, revision) => { if (!Number.isSafeInteger(revision) || revision < 0) throw new Error('无效的保存版本'); return store.save(data, revision); });
   handle('storage:info', () => ({ directory: dataDir, file: store.file, version: app.getVersion(), packaged: app.isPackaged }));
   handle('storage:restore', () => store.restoreBackup());

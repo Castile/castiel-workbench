@@ -1,6 +1,6 @@
 # 桌面实现与数据约定
 
-2026-10-25，开发版 0.2.0。第一阶段目标是让已确认界面成为可运行、可保存、可本地打包的桌面应用。
+2026-10-26，开发版 0.3.0。已确认界面已成为可运行、可保存、可本地打包的桌面应用，并增加本机 Agent 会话与对话渲染。
 
 ## 选型与边界
 
@@ -9,6 +9,8 @@
 依据 Electron 官方[安全清单](https://www.electronjs.org/docs/latest/tutorial/security)、[上下文隔离](https://www.electronjs.org/docs/latest/tutorial/context-isolation)与[自定义协议](https://www.electronjs.org/docs/latest/api/protocol)设计边界：Renderer 不启用 Node，启用 sandbox/contextIsolation，preload 只暴露具名方法，主进程校验来源。界面资源限制在 `castiel://app/` 的打包文件内，拒绝路径越界、新窗口、外站导航和浏览器权限。当前 CSP 和网络拦截禁止 Renderer 外部请求；模型调用现由主进程通过本机工具的私有管道适配器处理，没有放开页面外网请求。
 
 本地目录与生命周期采用官方 [app API](https://www.electronjs.org/docs/latest/api/app)。已增加本机工具探测，认证由原工具管理；工作台只暴露必要的配置摘要，不把密钥复制到工作文档。
+
+对话 Markdown 在 Renderer 内本地解析，不执行原始 HTML、不自动加载远程图片。点击外链时，通过具名 `links:open` 方法验证为不带凭据的 HTTP(S) URL，再交给默认浏览器；不会为 Renderer 放开网络。原生 `clipboard:write` 只接受最多 2Mi 字符的文本，供明确点击复制按钮使用；不暴露剪贴板读取或系统权限扩展。
 
 ## 本地数据协议
 

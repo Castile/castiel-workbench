@@ -229,3 +229,28 @@ This supersedes the desktop milestone's unconnected-Agent limit. Browser executi
 - The native accessibility verification bridge became unavailable during final recapture, so no new final-package screenshot or fresh responsive/theme audit is claimed. The established layout/theme design was preserved; earlier native interaction evidence and current build/runtime checks are distinct.
 
 Remaining limits: Claude interactive permission host, full artifact collection, automatic code validation, durable scheduling and closed-window execution are not implemented. A tool turn completing is not task acceptance. See `../docs/agent-integration.md` for protocol and data boundaries.
+
+## Conversation experience — 2026-10-26, v0.3.0
+
+Scope: improve the existing conversation and structured-input surface, using Codex as a layout reference. Official product/docs pages and the public demo video were inspected; the reference poster and conversation frame are saved as `design/codex-official-reference.webp` and `design/codex-official-conversation.png`. This is an intentional redesign within Castiel's established theme, not a pixel clone. Brand provenance is in `../docs/brand-assets.md`.
+
+| Step | Result | Evidence |
+| --- | --- | --- |
+| 1. Open an existing conversation | Healthy: user turns align right, Agent replies use an open centered reading surface; tool/model/workspace controls remain present | `design/chat-before.png`, `design/chat-app-light.png` |
+| 2. Read Markdown and copy code | Healthy: GFM tables, checklists, headings, inline code, highlighted fenced code and unknown languages render locally; original code is copied | `design/chat-markdown-light.png`, `design/chat-native-light.png` |
+| 3. Answer Agent questions | Healthy: described single choices, free text, optional notes, multi-question navigation, no default selection, blank validation and retry without input loss | `design/chat-questions-light.png`, `design/chat-questions-dark.png` |
+| 4. Review a permission request | Healthy in component/runtime fixtures: actual command and directory are shown, deny/allow remain explicit; queued backend requests remain answerable | `tests/chat-ui-checks.pw.js`, `tests/agents-runtime.test.mjs` |
+| 5. Read history and use smaller windows/themes | Healthy: new output preserves reading position, Return to latest works, multiline input shrinks after sending, context drawer opens/closes; 800px document width stays 800px | `design/chat-app-800.png`, `design/chat-questions-800.png`, `design/chat-native-dark.png` |
+
+Visual findings fixed: identical left-aligned user/Agent bubbles, unrendered Markdown, dense duplicated question controls, icon-only navigation lacking accessible names, excess collapsed-sidebar width, wrapping workspace heading and a multiline composer retaining its expanded height. Theme screenshot capture now disables finite transitions; an intermediate dark capture initially showed the prior light colors and was rejected/recaptured. Final selected-question colors were measured as background `rgb(40,50,78)` and text `rgb(163,178,255)`. No full accessibility certification is claimed.
+
+Verification:
+
+- `npm run check`: production build, 39 business/storage/runtime/rendering tests and 4 static packaging tests passed (43 total). Rendering tests exercise the actual component, including unknown/open fences, escaped code, forbidden HTML/images and external-link policy.
+- Browser component checks returned all 12 scenarios true: clipboard, Markdown, literal `custom` label, message alignment, questions, blank validation, back navigation, failed-submit retry, free text, secret masking, permission decline and reading position. The UI runner uses the fixture page; no supplier request is made. Multiline input separately verified 180px while editing and 62px after sending.
+- Independent read-only review found one definite P2: an actual option labeled `custom` collided with the internal free-text sentinel. Reproduced with a failing UI check, separated answer mode from the option label, and verified the literal `custom` answer payload and full scenario suite. No unresolved review finding remains.
+- Native first check showed clipboard failure under Electron's permission policy even though browser copy worked. Fixed with a bounded, write-only main-process method; the packaged app then copied the exact two-line source string and rejected an object payload. No generic clipboard-read method or browser permission expansion was added.
+- Final native package rendered real components from isolated local verification records in light and dark themes. Screenshots contain only authored verification content. The application was normally closed after verification, source/asar entries compared, and strict deep local signature verification passed. Native mock records and generated release files remain outside Git.
+- Initial Vite edits caused temporary HMR/context errors while related modules were being created; fresh navigation after complete edits rendered correctly. Final browser runs had no application errors; fixture password input produced only a Chromium verbose form advisory. The existing demo/browser and actual model integration remain distinct.
+
+Limits: structured questions/approvals were checked with component fixtures and actual runtime protocol fixtures, not a new live provider turn. Existing integration evidence from the previous milestone is retained; no fresh Claude billing or Codex supplier availability claim is made. Closed-window scheduling, full file artifact collection and automatic task acceptance remain outside this UI change.

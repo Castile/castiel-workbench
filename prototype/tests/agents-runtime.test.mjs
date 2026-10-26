@@ -140,3 +140,19 @@ test('Codex rebuilds a missing local rollout from saved conversation, but never 
     }else{assert.equal(calls.length,1);assert.match(runtime.runs.get('chat').error,/authentication failed/);}
   }
 });
+test('parallel Codex requests remain answerable in order and stopping clears all requests',async t=>{
+  const {runtime}=await fixture(t,'Codex');const sent=[];runtime.rpc={send:m=>sent.push(m),close(){},request:async()=>({})};
+  const run={id:'run',sessionId:'chat',agent:'Codex',externalId:'thread',status:'running',events:[],texts:new Map()};runtime.runs.set('chat',run);
+  runtime.codexMessage({id:1,method:'item/commandExecution/requestApproval',params:{threadId:'thread',command:'first'}});
+  const first=run.request.token;
+  runtime.codexMessage({id:2,method:'item/tool/requestUserInput',params:{threadId:'thread',questions:[{id:'q',question:'which?',options:[{label:'A'}]}]}});
+  assert.equal(run.request.token,first);assert.equal(run.requests.length,2);
+  assert.throws(()=>runtime.answer({token:first,decision:'acceptForSession'}),/无效/);
+  runtime.answer({token:first,decision:'decline'});
+  assert.equal(run.status,'waiting');assert.equal(run.request.kind,'questions');assert.equal(sent[0].id,1);
+  assert.throws(()=>runtime.answer({token:run.request.token,answers:{q:'   '}}),/回答/);
+  runtime.answer({token:run.request.token,answers:{q:'A\nAdditional detail'}});
+  assert.equal(run.status,'running');assert.equal(run.request,undefined);assert.deepEqual(sent[1].result,{answers:{q:{answers:['A\nAdditional detail']}}});
+  runtime.codexMessage({id:3,method:'item/fileChange/requestApproval',params:{threadId:'thread'}});
+  await runtime.stop('chat');assert.equal(runtime.pending.size,0);assert.equal(run.request,undefined);assert.equal(run.requests,undefined);
+});

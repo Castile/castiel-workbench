@@ -34,7 +34,7 @@ export class CodexRPC {
     });
   }
   async initialize() {
-    await this.request('initialize', { clientInfo: { name: 'castiel_workbench', title: 'Castiel', version: '0.2.0' } });
+    await this.request('initialize', { clientInfo: { name: 'castiel_workbench', title: 'Castiel', version: '0.3.0' } });
     this.send({ method: 'initialized', params: {} }); return this;
   }
   close() { this.child.kill('SIGTERM'); }
