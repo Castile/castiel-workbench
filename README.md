@@ -1,5 +1,7 @@
 # Castiel 工作台
 
+代码仓库：[Castile/castiel-workbench](https://github.com/Castile/castiel-workbench)（私有）。当前桌面开发版：0.3.0。
+
 面向个人工作与团队 PL 的本地桌面工作台。开发版采用 Electron + React，已接入真实本地保存、备份恢复和 macOS 打包；已接入本机 Codex 与 Claude Code 的配置探测和真实会话；每日自动编排、规则行为回归、扩展执行与发布仍为演示或待接入。
 
 ## 开发入口
@@ -57,4 +59,4 @@ docs/desktop-architecture.md  桌面选型、数据协议和能力边界
 
 Agent 首页、独立工具设置、会话一级入口、快捷提示词、深浅主题沿用已确认设计。项目一级菜单暂缓，Agent 空间独立于项目；普通会话独立于任务和团队负载。
 
-`node_modules/`、`dist/`、`release/`、缓存、日志、凭据和真实用户数据不提交。未配置远程仓库、自动更新或远程发布；macOS 包为本机临时签名，尚未进行 Developer ID 签名与公证。
+`node_modules/`、`dist/`、`release/`、缓存、日志、凭据和真实用户数据不提交。源代码托管在上述 GitHub 私有仓库；未配置安装包远程发布或自动更新。macOS 包为本机临时签名，尚未进行 Developer ID 签名与公证。
