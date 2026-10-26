@@ -269,3 +269,14 @@ User requirement: allow selecting a computer directory from a conversation's wor
 - Read-only independent review found no actionable P1/P2 issue. Existing running 0.3.0 app was quit normally with its save handshake before packaging, after verifying no persisted active run. Existing local user records were not replaced by test data.
 
 Evidence inspected: `design/workspace-directory-picker.png`, `design/workspace-multiple-conversations.png`, `design/workspace-picker-800.png`. Screens contain only authored verification data. Existing directory/default edits remain non-migrating; only this explicit conversation action can rebind its scope.
+
+
+## Launcher directory entry bugfix — 2026-10-26, v0.3.2
+
+- Root cause: 0.3.1 fixed the conversation composer, but the Agent homepage and dedicated Start page shared a separate select that only listed existing workspaces. The screenshot's red-box control had no native folder action.
+- Added “选择电脑中的目录…” in that exact dropdown, reusing the main-process directory chooser and existing directory registration helper. Browser preview disables the native action. Choosing a directory preserves the draft and model, keeps saved Agent defaults, reuses an existing path, and does not expand another Agent's allowed spaces. No conversation or inference starts just by choosing. Sending is blocked while the chooser is pending.
+- Test-first native UI reproduction failed on the missing option before implementation. After implementation, isolated native UI checks passed for the homepage and Agent Start page, cancellation, a chooser error, duplicate-directory reuse, draft/model preservation, other-Agent isolation and normal exit/relaunch restoration. An early test assertion needed to await the asynchronous directory return before checking the selected value.
+- The test substitutes only the OS dialog response, including cancellation and an owned temporary directory/error. Actual preload IPC, main-process validation/realpath, renderer state and local disk persistence run normally. This does not claim mouse automation of the system folder panel. Zero tasks, sessions or model runs were created by this test.
+- `npm run check`: build, 44 business/storage/runtime/rendering tests and 4 static packaging tests passed (48 total). Independent read-only review found no actionable defect.
+- Dark desktop and light 800×800 captures were inspected; the composer controls fit without horizontal document overflow. Evidence: `design/launcher-directory-selected.png`, `design/launcher-directory-800.png`, containing only authored test data.
+- The locally packaged 0.3.2 application passed the same isolated UI/restart scenarios; macOS bundle signature verification passed. The existing app was quit normally with its save handshake before replacing the bundle; its two saved sessions were retained.

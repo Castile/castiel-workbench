@@ -72,3 +72,8 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Conversation composer workspace control must allow choosing a local directory using the existing native chooser, or selecting an enabled workspace. The user explicitly allows rebinding the current idle, unarchived conversation: retain messages/draft, snapshot the new directory and invalidate the old backend session. Global workspace/default edits still never silently migrate other conversations.
 - One workspace can contain many independent conversations. The sibling-list plus button creates a blank conversation in the current scope, never a task; it must not invoke a model until the first actual send. Empty conversations remain visible in Sessions and restore after restart.
 - Directory registration reuses an existing matching canonical path, adds access only to the choosing Agent and keeps defaults/disabled states unchanged. Cancelling the chooser or dialog has no durable side effect. Starting a new conversation does not clone another conversation's messages or backend thread ID.
+
+## Launcher directory picker bugfix, 2026-10-26
+
+- The workspace dropdown below the Agent home composer and every Agent Start composer must expose “选择电脑中的目录…” directly through the native directory chooser. Do not require entering a conversation or settings first. Browser demo disables the native action.
+- Directory selection updates the current launcher choice only; preserve draft, model, saved defaults and other Agents’ workspace permissions. Reuse a space for an identical canonical path. Cancellation/failure retains the prior selection. Selection alone never creates a chat or starts inference.
