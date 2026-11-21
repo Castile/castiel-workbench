@@ -36,7 +36,7 @@ macOS 关窗口前保存，默认进程留在 Dock；关闭后台偏好或 Cmd+Q
 
 ## 本地打包
 
-打包脚本仅暂存桌面模块、共享文档协议和网页构建，不包含设计截图、测试、用户数据及完整开发依赖。生成 asar 应用包；macOS 仅本机 ad-hoc 签名。分发前仍需 Developer ID、公证、安装升级验证；没有上传、GitHub Release、自动更新或生产发布。
+打包脚本仅暂存桌面模块、共享文档协议和网页构建，不包含设计截图、测试、用户数据及完整开发依赖。生成 asar 应用包；macOS 仅本机 ad-hoc 签名。分发前仍需 Developer ID、公证、安装升级验证；Windows x64 使用 Inno Setup 生成按用户安装的程序，通过 GitHub Releases 分发。Windows 上对临时文件执行 flush 后再替换目标文件，父目录同步仅用于 POSIX 系统。
 
 本次运行时来自 Electron 官方 GitHub v45.0.0，文件 `electron-v45.0.0-darwin-arm64.zip`，120706020 bytes，SHA256 与 npm 包内官方 checksums.json 一致：
 

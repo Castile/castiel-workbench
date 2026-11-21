@@ -43,7 +43,10 @@ async function atomic(file, text) {
   try {
     handle = await fs.open(temporary, 'wx', 0o600); await handle.writeFile(text, 'utf8'); await handle.sync(); await handle.close(); handle = null;
     await fs.rename(temporary, file);
-    const directory = await fs.open(path.dirname(file), 'r'); try { await directory.sync(); } finally { await directory.close(); }
+    // Windows supports flushing the temporary file, but not opening its parent for fsync.
+    if (process.platform !== 'win32') {
+      const directory = await fs.open(path.dirname(file), 'r'); try { await directory.sync(); } finally { await directory.close(); }
+    }
   } finally { await handle?.close(); await fs.unlink(temporary).catch(e => { if (e.code !== 'ENOENT') throw e; }); }
 }
 function endpoint(server) {
@@ -68,7 +71,7 @@ function denial(rule, name) {
 export class CapabilityManager {
   constructor({ store, runtime, dialog, home = runtime?.home || os.homedir(), command = nativeCommand, managedDirectories }) {
     this.store = store; this.runtime = runtime; this.dialog = dialog; this.home = home; this.command = command;
-    this.managedDirectories = managedDirectories || (process.platform === 'darwin' ? ['/Library/Application Support/ClaudeCode'] : ['/etc/claude-code']);
+    this.managedDirectories = managedDirectories || (process.platform === 'darwin' ? ['/Library/Application Support/ClaudeCode'] : process.platform === 'win32' ? [path.join(process.env.ProgramFiles || 'C:/Program Files', 'ClaudeCode')] : ['/etc/claude-code']);
     this.manifestFile = path.join(store.directory, 'capability-imports.json'); this.busy = false;
   }
   clean(value, limit = 500) {

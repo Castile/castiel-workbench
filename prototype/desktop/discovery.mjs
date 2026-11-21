@@ -27,15 +27,28 @@ export async function desktopEnvironment(base = process.env, home = os.homedir()
       }
     } catch { /* Fall back to inherited environment and standard install locations. */ }
   }
-  env.PATH = [...new Set([...(env.PATH || '').split(path.delimiter), path.join(home, '.local/bin'), path.join(home, '.npm-global/bin'), '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'].filter(Boolean))].join(path.delimiter);
+  if (process.platform === 'win32') {
+    const pathKey = Object.keys(env).find(key => key.toUpperCase() === 'PATH');
+    const inherited = env[pathKey] || '';
+    if (pathKey && pathKey !== 'PATH') delete env[pathKey];
+    env.PATH = [inherited, path.join(home, '.local', 'bin')].filter(Boolean).join(path.delimiter);
+  } else env.PATH = [...new Set([...(env.PATH || '').split(path.delimiter), path.join(home, '.local/bin'), path.join(home, '.npm-global/bin'), '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'].filter(Boolean))].join(path.delimiter);
   // Do not leak the host application's JS loader or nest inside a Claude session.
   delete env.ELECTRON_RUN_AS_NODE; delete env.NODE_OPTIONS; delete env.CLAUDECODE; delete env.CLAUDE_CODE_ENTRYPOINT;
   return env;
 }
 export async function findCLI(name, env, home = os.homedir()) {
-  const candidates = (env.PATH || '').split(path.delimiter).filter(Boolean).map(dir => path.join(dir, name));
+  const candidates = (env.PATH || '').split(path.delimiter).filter(Boolean).map(dir => path.join(dir, process.platform === 'win32' ? name + '.exe' : name));
+  if (name === 'codex' && process.platform === 'win32') {
+    const target = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
+    for (const dir of (env.PATH || '').split(path.delimiter).filter(Boolean)) {
+      const pkg = path.join(dir, 'node_modules', '@openai', 'codex');
+      const binary = path.join('vendor', target + '-pc-windows-msvc', 'codex', 'codex.exe');
+      candidates.push(path.join(pkg, binary), path.join(pkg, 'node_modules', '@openai', 'codex-win32-' + process.arch, binary));
+    }
+  }
   if (name === 'codex' && process.platform === 'darwin') candidates.push('/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex', '/Applications/Codex.app/Contents/Resources/codex');
-  if (name === 'claude') candidates.push(path.join(home, '.local/bin/claude'));
+  if (name === 'claude' && process.platform !== 'win32') candidates.push(path.join(home, '.local/bin/claude'));
   for (const candidate of candidates) { try { await fs.access(candidate, 0o1); if ((await fs.stat(candidate)).isFile()) return candidate; } catch {} }
   return null;
 }

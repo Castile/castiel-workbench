@@ -286,5 +286,5 @@ export class AgentRuntime {
     this.publish(run);
     return this.publicRun(run);
   }
-  shutdown() { this.rpc?.close(); for (const run of this.active()) { if (run.child) { try { process.kill(-run.child.pid, 'SIGTERM'); } catch {} } } }
+  shutdown() { this.rpc?.close(); for (const run of this.active()) { if (run.child) { try { process.platform === 'win32' ? run.child.kill() : process.kill(-run.child.pid, 'SIGTERM'); } catch {} } } }
 }

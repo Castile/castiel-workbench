@@ -1,8 +1,18 @@
 # Castiel 工作台
 
-代码仓库：[Castile/castiel-workbench](https://github.com/Castile/castiel-workbench)（私有）。当前桌面开发版：0.3.2。
+代码仓库：[Castile/castiel-workbench](https://github.com/Castile/castiel-workbench)（私有）。当前桌面版本为 0.4.0。
 
-面向个人工作与团队 PL 的本地桌面工作台。开发版采用 Electron + React，已接入真实本地保存、备份恢复和 macOS 打包；已接入本机 Codex 与 Claude Code 的配置探测和真实会话；每日自动编排、规则行为回归、扩展执行与发布仍为演示或待接入。
+面向个人工作与团队 PL 的本地桌面工作台。开发版采用 Electron + React，已接入真实本地保存、备份恢复、macOS 打包和 Windows 安装包；已接入本机 Codex 与 Claude Code 的配置探测和真实会话；每日自动编排、规则行为回归、扩展执行与发布仍为演示或待接入。
+
+## Windows 11 安装
+
+**[下载 Windows 11 x64 安装程序](https://github.com/Castile/castiel-workbench/releases/download/v0.4.0/Castiel-Setup-0.4.0-win-x64.exe)** · [版本说明与 SHA-256 校验文件](https://github.com/Castile/castiel-workbench/releases/tag/v0.4.0)
+
+登录有仓库访问权限的 GitHub 账号，下载安装程序，双击后按向导安装。从开始菜单打开 **Castiel**。安装仅面向当前用户，安装程序尚未使用 Authenticode 签名。Windows 可能提示发布者未知，可用 PowerShell 的 `Get-FileHash` 与发布页的校验文件核对下载内容。
+
+会话和缓存默认保存在 `%APPDATA%\CastielWorkbench`，卸载应用会保留该目录。使用真实 Agent 时，请先在 Windows 上安装并配置 Codex 或 Claude Code。工作台从 Windows PATH 和常见安装目录寻找原生可执行文件。仅安装在 WSL 内的 CLI 需要另行安装 Windows 版。
+
+维护者可在 Windows x64 上安装 Node.js 和 Inno Setup 6，在仓库根目录运行 `npm run setup`、`npm run desktop:package`，再通过 PowerShell 运行 `.\prototype\installer\build.ps1`。安装程序生成在 `release\`。GitHub Actions 提供手动发布工作流，验证安装、启动、保存、重启和卸载后上传安装包。
 
 ## 开发入口
 
@@ -63,4 +73,4 @@ docs/desktop-architecture.md  桌面选型、数据协议和能力边界
 
 Agent 首页、独立工具设置、会话一级入口、快捷提示词、深浅主题沿用已确认设计。项目一级菜单暂缓，Agent 空间独立于项目；普通会话独立于任务和团队负载。
 
-`node_modules/`、`dist/`、`release/`、缓存、日志、凭据和真实用户数据不提交。源代码托管在上述 GitHub 私有仓库；未配置安装包远程发布或自动更新。macOS 包为本机临时签名，尚未进行 Developer ID 签名与公证。
+`node_modules/`、`dist/`、`release/`、缓存、日志、凭据和真实用户数据不提交。源代码托管在上述 GitHub 私有仓库；Windows 安装包通过 GitHub Releases 分发。macOS 包为本机临时签名，尚未进行 Developer ID 签名与公证。

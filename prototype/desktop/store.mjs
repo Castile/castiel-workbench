@@ -30,7 +30,10 @@ export class LocalStore {
     try {
       handle = await fs.open(temporary, 'wx', 0o600); await handle.writeFile(text, 'utf8'); await handle.sync(); await handle.close(); handle = null;
       await fs.rename(temporary, file);
+      // Windows supports flushing the temporary file, but not opening its parent for fsync.
+    if (process.platform !== 'win32') {
       const directory = await fs.open(path.dirname(file), 'r'); try { await directory.sync(); } finally { await directory.close(); }
+    }
     } finally { await handle?.close(); await fs.unlink(temporary).catch(e => { if (e.code !== 'ENOENT') throw e; }); }
   }
   save(data, expectedRevision) {
