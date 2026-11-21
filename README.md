@@ -1,18 +1,28 @@
 # Castiel 工作台
 
-代码仓库：[Castile/castiel-workbench](https://github.com/Castile/castiel-workbench)（私有）。当前桌面版本为 0.4.0。
+代码仓库：[Castile/castiel-workbench](https://github.com/Castile/castiel-workbench)（私有）。当前桌面版本为 0.4.1。
 
 面向个人工作与团队 PL 的本地桌面工作台。开发版采用 Electron + React，已接入真实本地保存、备份恢复、macOS 打包和 Windows 安装包；已接入本机 Codex 与 Claude Code 的配置探测和真实会话；每日自动编排、规则行为回归、扩展执行与发布仍为演示或待接入。
 
-## Windows 11 安装
+## 下载安装
 
-**[下载 Windows 11 x64 安装程序](https://github.com/Castile/castiel-workbench/releases/download/v0.4.0/Castiel-Setup-0.4.0-win-x64.exe)** · [版本说明与 SHA-256 校验文件](https://github.com/Castile/castiel-workbench/releases/tag/v0.4.0)
+登录有仓库访问权限的 GitHub 账号，在[最新发布页](https://github.com/Castile/castiel-workbench/releases/latest)选择适合电脑的安装包。同一版本的所有安装包共用一份 `SHA256SUMS.txt`。
 
-登录有仓库访问权限的 GitHub 账号，下载安装程序，双击后按向导安装。从开始菜单打开 **Castiel**。安装仅面向当前用户，安装程序尚未使用 Authenticode 签名。Windows 可能提示发布者未知，可用 PowerShell 的 `Get-FileHash` 与发布页的校验文件核对下载内容。
+| 电脑 | 下载 0.4.1 | 安装方式 |
+| --- | --- | --- |
+| Mac · Apple 芯片（M 系列） | [mac-arm64.dmg](https://github.com/Castile/castiel-workbench/releases/download/v0.4.1/Castiel-0.4.1-mac-arm64.dmg) | 打开 DMG，将 Castiel 拖入 Applications |
+| Mac · Intel 处理器 | [mac-x64.dmg](https://github.com/Castile/castiel-workbench/releases/download/v0.4.1/Castiel-0.4.1-mac-x64.dmg) | 打开 DMG，将 Castiel 拖入 Applications |
+| Windows 11 · x64 | [win-x64.exe](https://github.com/Castile/castiel-workbench/releases/download/v0.4.1/Castiel-Setup-0.4.1-win-x64.exe) | 双击按向导安装，从开始菜单打开 Castiel |
+
+Mac 可在苹果菜单的「关于本机」查看芯片或处理器。macOS 包使用临时签名，尚未经过 Apple 公证，首次打开可能受到 Gatekeeper 限制。Windows 按当前用户安装，安装程序尚未使用 Authenticode 签名，系统可能提示发布者未知。Mac 可用 `shasum -a 256`、Windows 可用 PowerShell 的 `Get-FileHash` 核对文件。
+
+### Windows 本机环境
 
 会话和缓存默认保存在 `%APPDATA%\CastielWorkbench`，卸载应用会保留该目录。使用真实 Agent 时，请先在 Windows 上安装并配置 Codex 或 Claude Code。工作台从 Windows PATH 和常见安装目录寻找原生可执行文件。仅安装在 WSL 内的 CLI 需要另行安装 Windows 版。
 
-维护者可在 Windows x64 上安装 Node.js 和 Inno Setup 6，在仓库根目录运行 `npm run setup`、`npm run desktop:package`，再通过 PowerShell 运行 `.\prototype\installer\build.ps1`。安装程序生成在 `release\`。GitHub Actions 提供手动发布工作流，验证安装、启动、保存、重启和卸载后上传安装包。
+维护者可在 Windows x64 上安装 Node.js 和 Inno Setup 6，在仓库根目录运行 `npm run setup`、`npm run desktop:package`，再通过 PowerShell 运行 `.\prototype\installer\build.ps1`。安装程序生成在 `release\`。macOS 在本机执行相同的 setup 和 desktop:package 命令后，运行 `bash prototype/installer/build-dmg.sh` 生成当前 CPU 架构的 DMG。
+
+维护者在 GitHub Actions 手动运行一次 **Desktop release**。工作流从同一提交分别构建三个安装包，验证通过后，在同一个 GitHub Release 发布。发布新版本前应先更新版本号和本页下载链接。
 
 ## 开发入口
 
@@ -73,4 +83,4 @@ docs/desktop-architecture.md  桌面选型、数据协议和能力边界
 
 Agent 首页、独立工具设置、会话一级入口、快捷提示词、深浅主题沿用已确认设计。项目一级菜单暂缓，Agent 空间独立于项目；普通会话独立于任务和团队负载。
 
-`node_modules/`、`dist/`、`release/`、缓存、日志、凭据和真实用户数据不提交。源代码托管在上述 GitHub 私有仓库；Windows 安装包通过 GitHub Releases 分发。macOS 包为本机临时签名，尚未进行 Developer ID 签名与公证。
+`node_modules/`、`dist/`、`release/`、缓存、日志、凭据和真实用户数据不提交。源代码托管在上述 GitHub 私有仓库；macOS 和 Windows 安装包统一通过 GitHub Releases 分发。macOS 包为本机临时签名，尚未进行 Developer ID 签名与公证。

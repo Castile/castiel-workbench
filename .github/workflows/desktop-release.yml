@@ -1,0 +1,70 @@
+name: Desktop release
+on: workflow_dispatch
+permissions:
+  contents: read
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: mac-arm64
+          - runner: macos-15-intel
+            target: mac-x64
+          - runner: windows-2025
+            target: win-x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - run: npm run setup
+      - run: npm run desktop:package
+      - name: Create and test macOS disk image
+        if: runner.os == 'macOS'
+        run: |
+          dmg=$(bash prototype/installer/build-dmg.sh)
+          bash prototype/installer/test-dmg.sh "$dmg"
+      - name: Create and test Windows installer
+        if: runner.os == 'Windows'
+        run: |
+          ./prototype/installer/build.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./prototype/installer/test-install.ps1 (Get-Item release/Castiel-Setup-*-win-x64.exe).FullName
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: release/Castiel-*-${{ matrix.target }}.*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 2
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      - name: Publish all verified installers together
+        working-directory: installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(jq -r .version ../prototype/package.json)
+          files=("Castiel-$version-mac-arm64.dmg" "Castiel-$version-mac-x64.dmg" "Castiel-Setup-$version-win-x64.exe")
+          sha256sum "${files[@]}" > SHA256SUMS.txt
+          gh release create "v$version" "${files[@]}" SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --title "Castiel $version · macOS / Windows" \
+            --notes "Apple 芯片 Mac 请选择 mac-arm64.dmg，Intel Mac 请选择 mac-x64.dmg；Windows 11 x64 请选择 win-x64.exe。macOS 打开磁盘映像后将 Castiel 拖入 Applications，Windows 双击安装程序。SHA256SUMS.txt 包含三个安装包的校验值。macOS 为临时签名，尚未公证；Windows 安装程序尚未签名。"

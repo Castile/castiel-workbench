@@ -1,6 +1,6 @@
 {
   "name": "castiel-workbench",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Castiel local desktop workbench — design and development baseline",
   "engines": {
