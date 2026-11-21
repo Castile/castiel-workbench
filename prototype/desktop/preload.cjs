@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('castielDesktop', Object.freeze({
   startAgent: args => invoke('agents:start', args),
   stopAgent: (sessionId, requestId) => invoke('agents:stop', sessionId, requestId),
   answerAgent: answer => invoke('agents:answer', answer),
+  listCapabilities: args => invoke('agents:capabilities', args),
+  manageCapability: args => invoke('agents:manage-capability', args),
   openExternal: url => invoke('links:open', url),
   writeClipboard: text => invoke('clipboard:write', text),
   onAgentEvent: callback => {

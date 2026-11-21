@@ -13,7 +13,7 @@ export const initialProjects=[
 const details={callback:{owner:'li',effort:20,projectId:'payments',priority:'高',due:'2026-10-23'},reconcile:{owner:'li',effort:14,projectId:'payments',priority:'中',due:'2026-10-21'},report:{owner:'me',effort:4,projectId:'payments',priority:'中',due:'2026-10-23'}};
 export function enrichTasks(tasks){return tasks.map(t=>({...t,week:0,ruleVersion:'v1.2',...details[t.id]}));}
 export function makeTask(title,extra={}){return {id:crypto.randomUUID(),title,status:'待规划',agent:'Codex',model:'system',date:todayISO().slice(5),owner:'me',effort:null,week:0,projectId:'personal',priority:'中',due:todayISO(),ruleVersion:'v1.2',messages:[],context:['等待规划与执行。','按任务范围选择资料。','尚未记录排除路径。','明确验收目标并开始执行。'],...extra};}
-export function extraTasks(){return [makeTask('日志补充',{id:'logs',owner:'li',effort:4,projectId:'payments',status:'已排队'}),makeTask('管理端表单',{id:'form',owner:'lin',effort:24,projectId:'admin',status:'执行中',agent:'Claude'}),makeTask('回归测试',{id:'test',owner:'chen',effort:20,projectId:'payments',status:'待规划'}),makeTask('下周需求评审',{id:'review',owner:'me',effort:18,projectId:'admin',status:'待规划',agent:'Gemini'})];}
+export function extraTasks(){return [makeTask('日志补充',{id:'logs',owner:'li',effort:4,projectId:'payments',status:'已排队'}),makeTask('管理端表单',{id:'form',owner:'lin',effort:24,projectId:'admin',status:'执行中',agent:'Claude'}),makeTask('回归测试',{id:'test',owner:'chen',effort:20,projectId:'payments',status:'待规划'}),makeTask('下周需求评审',{id:'review',owner:'me',effort:18,projectId:'admin',status:'待规划',agent:'Claude'})];}
 export function loadFor(tasks,member,week=0,projectId='all'){
  const all=tasks.filter(t=>t.owner===member.id&&(t.week??0)===week&&t.status!=='已取消');
  const scoped=all.filter(t=>projectId==='all'||t.projectId===projectId);
@@ -22,6 +22,6 @@ export function loadFor(tasks,member,week=0,projectId='all'){
  return {hours,scoped:sum(scoped),capacity,unestimated:all.filter(t=>t.effort==null).length,ratio:capacity>0?hours/capacity:null,excess:Math.max(0,hours-capacity),tasks:scoped};
 }
 export function parseDaily(text,projects,members,ruleVersion){
- return text.split(/[，,；;\n]+|然后|并且/).map(s=>s.trim()).filter(Boolean).map(title=>makeTask(title,{owner:members.find(m=>m.id!=='me'&&title.includes(m.name))?.id||'me',projectId:projects.find(p=>p.id!=='personal'&&title.includes(p.name))?.id||(title.includes('支付')?'payments':'personal'),agent:/周报|文档|调研|整理/.test(title)?'Gemini':'Codex',ruleVersion}));
+ return text.split(/[，,；;\n]+|然后|并且/).map(s=>s.trim()).filter(Boolean).map(title=>makeTask(title,{owner:members.find(m=>m.id!=='me'&&title.includes(m.name))?.id||'me',projectId:projects.find(p=>p.id!=='personal'&&title.includes(p.name))?.id||(title.includes('支付')?'payments':'personal'),agent:/周报|文档|调研|整理/.test(title)?'Claude':'Codex',ruleVersion}));
 }
 export const statusTone=s=>s==='已完成'?'green':['已阻塞','待确认'].includes(s)?'orange':['执行中','验证中','待验收'].includes(s)?'blue':'gray';

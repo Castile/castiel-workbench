@@ -8,7 +8,7 @@
     "build": "vite build && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",
     "test:sites": "node --test tests/sites-worker.test.mjs",
-    "test": "node --test tests/agent-data.test.mjs tests/workspace-data.test.mjs tests/local-store.test.mjs tests/agents-runtime.test.mjs tests/chat-rendering.test.mjs tests/conversation-workspaces.test.mjs",
+    "test": "node --test tests/agent-data.test.mjs tests/workspace-data.test.mjs tests/local-store.test.mjs tests/agents-runtime.test.mjs tests/chat-rendering.test.mjs tests/conversation-workspaces.test.mjs tests/capabilities.test.mjs",
     "desktop:start": "electron desktop/main.mjs",
     "desktop:dev": "npm run build && npm run desktop:start",
     "desktop:package": "npm run build && node scripts/package-desktop.mjs"

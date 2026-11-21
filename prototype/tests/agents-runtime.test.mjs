@@ -7,7 +7,11 @@ import { AgentRuntime } from '../desktop/agents.mjs';
 import { CodexRPC } from '../desktop/rpc.mjs';
 import { LocalStore } from '../desktop/store.mjs';
 import { claudeSummary, findCLI, modelName, redactError } from '../desktop/discovery.mjs';
+import * as discovery from '../desktop/discovery.mjs';
 import { rebindConversationWorkspace } from '../src/state/conversation-workspaces.js';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { loadRuntimeUI } from './agent-runtime-ui.mjs';
 
 async function until(check) { const end=Date.now()+4000; while(!check()){if(Date.now()>end)throw new Error('fixture timeout');await new Promise(r=>setTimeout(r,10));} }
 async function fixture(t, agent='Claude', mode='success') {
@@ -36,6 +40,14 @@ if(process.argv.includes('app-server')){
   log({type:'system',subtype:'init',session_id:'claude-fixture',model:'local-test-model'});
   if(process.env.CASTIEL_FIXTURE_MODE==='wait'){setInterval(()=>{},1000);return;}
   log({type:'stream_event',event:{type:'message_start',message:{id:'message'}}});
+  if(process.env.CASTIEL_FIXTURE_MODE==='thinking'){
+   log({type:'stream_event',event:{type:'content_block_start',index:0,content_block:{type:'thinking',thinking:''}}});
+   log({type:'stream_event',event:{type:'content_block_delta',index:0,delta:{type:'thinking_delta',thinking:'Public **summary**'}}});
+   log({type:'stream_event',event:{type:'content_block_delta',index:0,delta:{type:'signature_delta',signature:'private-signature'}}});
+   log({type:'stream_event',event:{type:'content_block_stop',index:0}});
+   log({type:'assistant',message:{id:'message',content:[{type:'thinking',thinking:'Public **summary**',signature:'private-signature'},{type:'redacted_thinking',data:'private-data'}]}});
+   log({type:'result',is_error:false});return;
+  }
   log({type:'stream_event',event:{delta:{type:'text_delta',text:input}}});
   log({type:'assistant',message:{id:'message',content:[{type:'text',text:input}]}});
   log({type:'result',is_error:process.env.CASTIEL_FIXTURE_MODE==='error',result:input,permission_denials:process.env.CASTIEL_FIXTURE_MODE==='denied'?[{tool_name:'Edit'}]:[]});
@@ -50,9 +62,11 @@ if(process.argv.includes('app-server')){
   await store.save({records:{tasks:[],sessions:[session]},agentConfig:{[agent]:{enabled:true}},spaces:[{id:'s',name:'fixture',path:''}]},0);
   const events=[];const runtime=new AgentRuntime({store,emit:e=>events.push(e),home:directory});
   runtime.env={...process.env,CASTIEL_FIXTURE_MODE:mode};runtime.redactionEnv={};
-  runtime.catalog={checking:false,agents:{[agent]:{ready:true,executable,configuredModel:'local-test-model',models:[['system','default','']]}}};
+  runtime.catalog={checking:false,agents:{[agent]:{ready:true,executable,configuredModel:'local-test-model',configuredReasoningEffort:'medium',configuredApprovalsReviewer:'user',reasoningEfforts:{'local-test-model':['low','medium','high'],'*':['low','medium','high']},capabilities:{effort:true,autoReview:true,reviewer:true,permissionModes:['manual','acceptEdits','auto','plan']},models:[['system','default','']]}}};
   t.after(()=>runtime.shutdown());return {directory,executable,store,runtime,events};
 }
+
+async function sessionSettings(f,settings){const doc=await f.store.read(f.store.file);doc.data.records.sessions[0].agentSettingsSnapshot={...doc.data.records.sessions[0].agentSettingsSnapshot,...settings};await f.store.save(doc.data,doc.revision);}
 
 test('discovery returns configured models and auth presence without exposing credential values',()=>{
   const secret='secret-test-value-12345';
@@ -168,4 +182,129 @@ test('changed conversation directory is used by the CLI without resuming its pre
   await runtime.start({sessionId:'chat',prompt:'second'});await until(()=>runtime.runs.get('chat').status==='completed');
   assert.equal(runtime.runs.get('chat').cwd,await fs.realpath(target));
   assert.equal(JSON.parse(await fs.readFile(argsFile,'utf8')).includes('--resume'),false);
+});
+
+test('Claude discovers effort and safe permission choices from the installed help text',()=>{
+  const help='  --effort <level> Effort level\n    (low, medium, high, xhigh, max)\n  --permission-mode <mode> Permission mode\n    (choices: "acceptEdits", "auto", "bypassPermissions", "manual", "dontAsk", "plan")\n  --next <value> other';
+  const info=claudeSummary({effortLevel:'high',permissions:{defaultMode:'acceptEdits'}},{},{},help);
+  assert.deepEqual(info.reasoningEfforts,{'*':['low','medium','high','xhigh','max']});
+  assert.equal(info.configuredReasoningEffort,'high');assert.equal(info.configuredPermissionMode,'acceptEdits');
+  assert.deepEqual(info.capabilities,{effort:true,autoReview:false,permissionModes:['manual','acceptEdits','auto','plan']});
+  const older=claudeSummary({},{},{},'  --model <model> Set model');
+  assert.deepEqual(older.reasoningEfforts,{});assert.equal(older.capabilities.effort,false);assert.deepEqual(older.capabilities.permissionModes,[]);
+  const unlisted=claudeSummary({},{},{},'  --effort <level> Controls high-level work\n  --permission-mode <mode> Automatic choices may vary');
+  assert.deepEqual(unlisted.reasoningEfforts,{});assert.deepEqual(unlisted.capabilities.permissionModes,[]);
+});
+
+test('Codex catalog uses actual model effort lists and protocol reviewer support',()=>{
+  assert.equal(typeof discovery.codexSummary,'function');
+  const schema={properties:{effort:{},approvalsReviewer:{$ref:'#/definitions/ApprovalsReviewer'}},definitions:{ApprovalsReviewer:{enum:['user','auto_review','guardian_subagent']}}};
+  const info=discovery.codexSummary({model:'model-a',model_reasoning_effort:'high',approvals_reviewer:'auto_review'},[{model:'model-a',defaultReasoningEffort:'low',supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'high'}]},{model:'model-b',supportedReasoningEfforts:[]}],schema);
+  assert.deepEqual(info.reasoningEfforts,{'model-a':['low','high'],'model-b':[]});
+  assert.deepEqual(info.defaultReasoningEfforts,{'model-a':'low'});
+  assert.equal(info.configuredReasoningEffort,'high');assert.equal(info.configuredApprovalsReviewer,'auto_review');assert.equal(info.capabilities.autoReview,true);
+  const older=discovery.codexSummary({},[],{});assert.equal(older.capabilities.autoReview,false);assert.equal(older.capabilities.effort,false);
+});
+
+test('Codex sends per-session effort and reviewer on the actual turn without granting sandbox permissions',async t=>{
+  const f=await fixture(t,'Codex');await sessionSettings(f,{reasoningEffort:'high',approvalsReviewer:'auto_review'});
+  const calls=[];f.runtime.rpc={close(){},async request(method,params){calls.push({method,params});return method==='thread/start'?{thread:{id:'thread'},model:'local-test-model'}:{turn:{id:'turn'}};}};
+  await f.runtime.start({sessionId:'chat',prompt:'hello'});await until(()=>f.runtime.runs.get('chat').turnId);
+  assert.equal(calls[1].params.effort,'high');assert.equal(calls[1].params.approvalsReviewer,'auto_review');
+  assert.equal(calls[1].params.approvalPolicy,undefined);assert.equal(calls[0].params.sandbox,undefined);
+});
+
+test('Codex system selection restores configured effort and reviewer for a resumed turn',async t=>{
+  const f=await fixture(t,'Codex');await sessionSettings(f,{reasoningEffort:'system',approvalsReviewer:'system'});
+  const calls=[];f.runtime.rpc={close(){},async request(method,params){calls.push({method,params});return method==='thread/start'?{thread:{id:'thread'},model:'local-test-model'}:{turn:{id:'turn'}};}};
+  await f.runtime.start({sessionId:'chat',prompt:'hello'});await until(()=>f.runtime.runs.get('chat').turnId);
+  assert.equal(calls[1].params.effort,'medium');assert.equal(calls[1].params.approvalsReviewer,'user');
+});
+
+test('unsupported effort and reviewer settings are rejected before launching a turn',async t=>{
+  for(const [agent,settings,capabilities] of [['Codex',{reasoningEffort:'max'},null],['Codex',{approvalsReviewer:'auto_review'},{effort:true,autoReview:false}],['Codex',{approvalsReviewer:'never'},null],['Claude',{permissionMode:'bypassPermissions'},null],['Claude',{reasoningEffort:'high'},{effort:false,autoReview:false,permissionModes:['plan']}],['Claude',{permissionMode:'auto'},{effort:true,permissionModes:['plan']}]] ){
+    const f=await fixture(t,agent);await sessionSettings(f,settings);if(capabilities)f.runtime.catalog.agents[agent].capabilities=capabilities;
+    await assert.rejects(f.runtime.start({sessionId:'chat',prompt:'hello'}),/不支持|无效/);assert.equal(f.runtime.runs.size,0);
+  }
+});
+
+test('Claude passes effort and native permission mode only when selected, with planning taking priority',async t=>{
+  for(const [permissionMode,planning,expected] of [['manual',false,'manual'],['acceptEdits',false,'acceptEdits'],['auto',false,'auto'],['auto',true,'plan'],['system',false,null]]){
+    const f=await fixture(t);await sessionSettings(f,{reasoningEffort:permissionMode==='system'?'system':'high',permissionMode,...(planning?{executionMode:'仅规划'}:{})});
+    const argsFile=path.join(f.directory,'arguments.json');f.runtime.env.CASTIEL_FIXTURE_ARGS=argsFile;
+    await f.runtime.start({sessionId:'chat',prompt:'hello'});await until(()=>f.runtime.runs.get('chat').status==='completed');
+    const args=JSON.parse(await fs.readFile(argsFile,'utf8'));
+    assert.equal(args.includes('--effort'),permissionMode!=='system');if(permissionMode!=='system')assert.equal(args[args.indexOf('--effort')+1],'high');
+    assert.equal(args.includes('--permission-mode'),Boolean(expected));if(expected)assert.equal(args[args.indexOf('--permission-mode')+1],expected);
+    assert.equal(args.some(v=>v.includes('skip-permissions')||v==='bypassPermissions'),false);
+  }
+});
+
+test('Codex stores only public reasoning summaries separately from final answer and stops reasoning activity',async t=>{
+  const f=await fixture(t,'Codex');const run={id:'run',sessionId:'chat',agent:'Codex',externalId:'thread',status:'running',text:'',events:[],texts:new Map(),reasoning:[],reasoningActive:false};f.runtime.runs.set('chat',run);
+  const send=(method,params)=>f.runtime.codexMessage({method,params:{threadId:'thread',...params}});
+  send('item/started',{item:{id:'thought',type:'reasoning'}});assert.equal(run.reasoningActive,true);
+  send('item/reasoning/summaryTextDelta',{itemId:'thought',summaryIndex:0,delta:'Public '});send('item/reasoning/summaryTextDelta',{itemId:'thought',summaryIndex:0,delta:'summary'});
+  send('item/reasoning/textDelta',{itemId:'thought',delta:'private raw reasoning'});
+  send('item/completed',{item:{id:'thought',type:'reasoning',summary:['Public summary','Second summary'],content:['private content'],encryptedContent:'private encrypted'}});
+  assert.deepEqual(run.reasoning,[{id:'thought:0',text:'Public summary'},{id:'thought:1',text:'Second summary'}]);assert.equal(run.reasoningActive,false);
+  send('turn/completed',{turn:{status:'interrupted'}});const saved=f.runtime.snapshot().runs[0];assert.equal(saved.text,'');assert.equal(saved.reasoningActive,false);assert.equal(saved.status,'interrupted');assert.doesNotMatch(JSON.stringify(saved),/private/);
+});
+
+test('Claude thinking deltas and completed thinking blocks deduplicate without exposing signatures or final text',async t=>{
+  const {runtime,events}=await fixture(t,'Claude','thinking');await runtime.start({sessionId:'chat',prompt:'hello'});await until(()=>runtime.runs.get('chat').status==='completed');
+  const run=runtime.snapshot().runs[0];assert.deepEqual(run.reasoning,[{id:'message:0',text:'Public **summary**'}]);assert.equal(run.text,'');assert.equal(run.reasoningActive,false);assert.doesNotMatch(JSON.stringify(run),/private-signature|private-data/);
+  assert.ok(events.some(e=>e.run?.reasoningActive));
+});
+
+test('summary-only runs remain message records across later turns and interruption',async t=>{
+  const ui=await loadRuntimeUI(t);assert.equal(typeof ui.applyRunToRecord,'function');
+  const first={id:'first',agent:'Codex',status:'completed',model:'model',text:'',reasoning:[{id:'summary',text:'Only public summary'}],reasoningActive:false};
+  let record=ui.applyRunToRecord({messages:[{who:'我',text:'first'}]},first);
+  assert.equal(record.messages.length,2);assert.deepEqual(record.messages[1].reasoning,first.reasoning);assert.equal(record.messages[1].text,'');
+  const second={id:'second',agent:'Codex',status:'running',model:'model',text:'',reasoning:[{id:'another',text:'Partial summary'}],reasoningActive:true};
+  record=ui.applyRunToRecord({...record,messages:[...record.messages,{who:'我',text:'second'}]},second);
+  record=ui.applyRunToRecord(record,{...second,status:'interrupted',reasoningActive:false});
+  assert.equal(record.messages.length,4);assert.equal(record.messages[1].reasoning[0].text,'Only public summary');assert.equal(record.messages[3].runStatus,'interrupted');assert.equal(record.messages[3].reasoningActive,false);
+  assert.equal(record.messages[3].reasoning[0].text,'Partial summary');
+});
+
+test('conversation renders public summaries in collapsed Markdown and keeps final-copy text separate',async t=>{
+  const {Conversation}=await loadRuntimeUI(t);
+  const html=renderToStaticMarkup(React.createElement(Conversation,{messages:[{who:'Codex',text:'Final answer',runId:'run-first',reasoning:[{id:'r',text:'Public **summary**'}],reasoningActive:false,runStatus:'completed'}]}));
+  assert.match(html,/<details[^>]*class="chat-reasoning"/);assert.doesNotMatch(html,/<details[^>]*open/);assert.match(html,/<strong>summary<\/strong>/);assert.match(html,/已思考/);assert.match(html,/Final answer/);
+  const thinking=renderToStaticMarkup(React.createElement(Conversation,{messages:[{who:'Claude',text:'',runId:'run-active',reasoning:[],reasoningActive:true,runStatus:'running'}],run:{id:'active',status:'running',reasoningActive:true}}));
+  assert.match(thinking,/思考中/);assert.match(thinking,/尚未提供公开摘要/);assert.doesNotMatch(thinking,/复制回复/);
+  const stopped=renderToStaticMarkup(React.createElement(Conversation,{messages:[{who:'Claude',text:'',reasoning:[{id:'r',text:'Partial'}],reasoningActive:false,runStatus:'interrupted'}]}));
+  assert.match(stopped,/已停止/);assert.match(stopped,/Partial/);
+});
+
+test('starting a turn is rejected while native capability settings are being changed',async t=>{
+  const {runtime}=await fixture(t);runtime.capabilitiesBusy=true;
+  await assert.rejects(runtime.start({sessionId:'chat',prompt:'hello'}),/正在更新/);assert.equal(runtime.runs.size,0);
+});
+
+test('a resumed Codex thread explicitly resets high effort and auto review to detected system defaults',async t=>{
+  const f=await fixture(t,'Codex'),calls=[];await sessionSettings(f,{reasoningEffort:'high',approvalsReviewer:'auto_review'});
+  f.runtime.catalog.agents.Codex.configuredReasoningEffort=null;f.runtime.catalog.agents.Codex.defaultReasoningEfforts={'local-test-model':'low'};
+  f.runtime.rpc={close(){},async request(method,params){calls.push({method,params});return method.startsWith('thread/')?{thread:{id:'thread'},model:'local-test-model'}:{turn:{id:'turn-'+calls.length}};}};
+  await f.runtime.start({sessionId:'chat',prompt:'first'});await until(()=>f.runtime.runs.get('chat').turnId);
+  f.runtime.codexMessage({method:'turn/completed',params:{threadId:'thread',turn:{status:'completed'}}});
+  const doc=await f.store.read(f.store.file);doc.data.records.sessions[0].runtime=f.runtime.snapshot().runs[0];await f.store.save(doc.data,doc.revision);
+  await sessionSettings(f,{reasoningEffort:'system',approvalsReviewer:'system'});
+  await f.runtime.start({sessionId:'chat',prompt:'second'});await until(()=>f.runtime.runs.get('chat').turnId);
+  assert.deepEqual(calls.map(call=>call.method),['thread/start','turn/start','thread/resume','turn/start']);
+  assert.equal(calls[1].params.effort,'high');assert.equal(calls[3].params.effort,'low');assert.equal(calls[3].params.approvalsReviewer,'user');
+});
+
+test('returning to system rebuilds Codex context when an overridden effort has no discoverable default',async t=>{
+  const f=await fixture(t,'Codex'),calls=[];await sessionSettings(f,{reasoningEffort:'system'});
+  const doc=await f.store.read(f.store.file),session=doc.data.records.sessions[0];
+  const cwd=await fs.realpath(await fs.mkdir(path.join(f.store.directory,'workspaces','s'),{recursive:true}).then(()=>path.join(f.store.directory,'workspaces','s')));
+  session.runtime={agent:'Codex',cwd,externalId:'old-thread',status:'completed',requestedModel:'system',model:'local-test-model',requestedReasoningEffort:'high',reasoningEffort:'high'};
+  session.messages=[{who:'我',text:'Remember preserved history'},{who:'Codex',text:'Saved'},{who:'我',text:'next'}];await f.store.save(doc.data,doc.revision);
+  f.runtime.catalog.agents.Codex.configuredReasoningEffort=null;f.runtime.catalog.agents.Codex.defaultReasoningEfforts={};
+  f.runtime.rpc={close(){},async request(method,params){calls.push({method,params});return method==='thread/start'?{thread:{id:'replacement'},model:'local-test-model'}:{turn:{id:'turn'}};}};
+  await f.runtime.start({sessionId:'chat',prompt:'next'});await until(()=>f.runtime.runs.get('chat').turnId||f.runtime.runs.get('chat').status==='failed');
+  assert.equal(calls[0].method,'thread/start');assert.match(calls[1].params.input[0].text,/Remember preserved history/);assert.equal(calls[1].params.effort,undefined);
 });

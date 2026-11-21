@@ -40,3 +40,12 @@ test('running or archived conversations cannot be rebound and unchanged selectio
   const archived=addRecords({tasks:[],sessions:[]},[{...first,runtime:undefined,sessionArchived:true}]);
   assert.throws(()=>workspaces.rebindConversationWorkspace(archived,first.id,{...space,path:'/other'}),/归档/);
 });
+
+test('new sibling conversations snapshot Agent-specific controls independently from later default edits',()=>{
+ const settings={reasoningEffort:'high',approvalsReviewer:'auto_review',permissionMode:'system',instructions:'中文回答'};
+ const row=workspaces.createWorkspaceConversation({workspace:{id:'work',name:'本机空间',path:'/tmp/work'},agent:'Codex',settings});
+ settings.reasoningEffort='low';
+ assert.equal(row.agentSettingsSnapshot.reasoningEffort,'high');
+ assert.equal(row.agentSettingsSnapshot.approvalsReviewer,'auto_review');
+ assert.equal(row.agentSettingsSnapshot.instructions,'中文回答');
+});

@@ -39,7 +39,35 @@ export async function findCLI(name, env, home = os.homedir()) {
   for (const candidate of candidates) { try { await fs.access(candidate, 0o1); if ((await fs.stat(candidate)).isFile()) return candidate; } catch {} }
   return null;
 }
-export function claudeSummary(settings, env, auth = {}) {
+const effortName = value => typeof value === 'string' && /^(none|minimal|low|medium|high|xhigh|max|ultra)$/.test(value) ? value : null;
+function optionHelp(help, flag) {
+  const lines = String(help || '').split('\n'), at = lines.findIndex(line => line.trimStart().startsWith(flag + ' '));
+  if (at < 0) return '';
+  const next = lines.findIndex((line, i) => i > at && /^\s*--?[a-z]/.test(line));
+  return lines.slice(at, next < 0 ? undefined : next).join(' ');
+}
+function schemaValues(schema, value) {
+  if (!value) return [];
+  if (value.$ref?.startsWith('#/definitions/')) return schemaValues(schema, schema.definitions?.[value.$ref.split('/').at(-1)]);
+  return value.enum || (value.anyOf || value.oneOf || []).flatMap(part => schemaValues(schema, part));
+}
+export async function codexTurnSchema(executable, env) {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'castiel-codex-capabilities-'));
+  try {
+    await command(executable, ['app-server', 'generate-json-schema', '--out', directory], env, 10000);
+    return await readJSON(path.join(directory, 'v2', 'TurnStartParams.json'));
+  } catch { return {}; }
+  finally { await fs.rm(directory, { recursive: true, force: true }); }
+}
+export function codexSummary(config, models, schema = {}) {
+  const configuredModel = modelName(config.model) || null;
+  const reasoningEfforts = Object.fromEntries(models.filter(m => modelName(m.model)).map(m => [m.model, [...new Set((m.supportedReasoningEfforts || []).map(option => effortName(option.reasoningEffort)).filter(Boolean))]]));
+  const defaultReasoningEfforts = Object.fromEntries(models.filter(m => modelName(m.model) && effortName(m.defaultReasoningEffort)).map(m => [m.model, m.defaultReasoningEffort]));
+  const reviewers = schemaValues(schema, schema.properties?.approvalsReviewer);
+  return { configuredModel, configuredReasoningEffort: effortName(config.model_reasoning_effort), configuredApprovalsReviewer: ['user', 'auto_review'].includes(config.approvals_reviewer) ? config.approvals_reviewer : config.approvals_reviewer === 'guardian_subagent' ? 'auto_review' : 'user', reasoningEfforts, defaultReasoningEfforts,
+    capabilities: { effort: Boolean(schema.properties?.effort), reviewer: reviewers.includes('user'), autoReview: reviewers.includes('auto_review') } };
+}
+export function claudeSummary(settings, env, auth = {}, help = '') {
   const effective = { ...env, ...settings.env };
   const configured = modelName(settings.model) || modelName(effective.ANTHROPIC_MODEL);
   const models = new Map([['system', ['system', configured ? '本机默认 · ' + configured : '本机默认', '沿用 Claude Code 的配置']]]);
@@ -48,7 +76,14 @@ export function claudeSummary(settings, env, auth = {}) {
   }
   if (configured) models.set(configured, [configured, configured, '本机配置模型']);
   const hasCredential = Boolean(auth.loggedIn || effective.ANTHROPIC_API_KEY || effective.ANTHROPIC_AUTH_TOKEN || settings.apiKeyHelper || effective.CLAUDE_CODE_USE_BEDROCK || effective.CLAUDE_CODE_USE_VERTEX || effective.CLAUDE_CODE_USE_FOUNDRY);
-  return { configuredModel: configured || null, models: [...models.values()], authenticated: hasCredential, provider: effective.ANTHROPIC_BASE_URL ? '本机自定义服务' : auth.apiProvider || '本机默认服务', authLabel: hasCredential ? '沿用本机认证' : '未检测到认证，请先在 Claude Code 登录' };
+  const effortHelp = optionHelp(help, '--effort'), permissionHelp = optionHelp(help, '--permission-mode');
+  const effortChoices = effortHelp.match(/\((?:choices:\s*)?((?:"?(?:none|minimal|low|medium|high|xhigh|max|ultra)"?[\s,]*)+)\)/)?.[1] || '';
+  const efforts = [...new Set((effortChoices.match(/\b(?:none|minimal|low|medium|high|xhigh|max|ultra)\b/g) || []))];
+  const permissionChoices = permissionHelp.match(/\(choices:\s*([^)]*)\)/)?.[1] || '';
+  const permissionModes = ['manual', 'acceptEdits', 'auto', 'plan'].filter(mode => new RegExp('(?:"|\\b)' + mode + '(?:"|\\b)').test(permissionChoices));
+  return { configuredModel: configured || null, models: [...models.values()], authenticated: hasCredential, provider: effective.ANTHROPIC_BASE_URL ? '本机自定义服务' : auth.apiProvider || '本机默认服务', authLabel: hasCredential ? '沿用本机认证' : '未检测到认证，请先在 Claude Code 登录',
+    configuredReasoningEffort: effortName(effective.CLAUDE_CODE_EFFORT_LEVEL) || effortName(settings.effortLevel), configuredPermissionMode: ['manual', 'acceptEdits', 'auto', 'plan'].includes(settings.permissions?.defaultMode) ? settings.permissions.defaultMode : null,
+    reasoningEfforts: efforts.length ? { '*': efforts } : {}, capabilities: { effort: Boolean(effortHelp && efforts.length), autoReview: false, permissionModes } };
 }
 export function redactError(text, env = {}) {
   let result = String(text || '工具运行失败');

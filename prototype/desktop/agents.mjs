@@ -5,7 +5,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { CodexRPC } from './rpc.mjs';
-import { desktopEnvironment, findCLI, command, readJSON, claudeSummary, modelName, redactError } from './discovery.mjs';
+import { desktopEnvironment, findCLI, command, readJSON, claudeSummary, codexSummary, codexTurnSchema, modelName, redactError } from './discovery.mjs';
 
 export const coreInstructions = '你在 Castiel 本地工作台中处理用户任务。遵守本机工具的权限与配置，不扩大授权范围。按任务加载必要资料；持续推进到实现、必要审查、验证和汇报闭环。阶段进展不等于完成。保留目标、状态、决策、已排除路径及原因、下一步。准确区分真实运行、未验证、失败与阻塞；不要虚构产物或测试结果。仅规划模式不能修改文件。';
 const busy = run => ['starting', 'running', 'waiting', 'stopping'].includes(run.status);
@@ -34,7 +34,8 @@ export class AgentRuntime {
             const settings = await readJSON(path.join(configDir, 'settings.json'));
             this.redactionEnv = { ...this.redactionEnv, ...settings.env };
             const auth = await command(executable, ['auth', 'status', '--json'], this.env).then(JSON.parse).catch(() => ({}));
-            Object.assign(info, claudeSummary(settings, this.env, auth), { configPaths: [path.join(configDir, 'settings.json')] });
+            const help = await command(executable, ['--help'], this.env).catch(() => '');
+            Object.assign(info, claudeSummary(settings, this.env, auth, help), { configPaths: [path.join(configDir, 'settings.json')] });
           } else {
             const rpc = new CodexRPC(executable, this.env, { onMessage: msg => this.codexMessage(msg), onExit: () => {
               if (this.rpc !== rpc) return; this.rpc = null;
@@ -53,6 +54,7 @@ export class AgentRuntime {
             try {
               do { const result = await rpc.request('model/list', { limit: 100, includeHidden: false, ...(cursor ? { cursor } : {}) }); models.push(...(result.data || [])); cursor = result.nextCursor; } while (cursor && models.length < 500);
             } catch { info.message = '模型目录暂未返回，仍可使用本机默认模型'; }
+            Object.assign(info, codexSummary(config, models, await codexTurnSchema(executable, this.env)));
             info.models = [['system', info.configuredModel ? '本机默认 · ' + info.configuredModel : '本机默认', '沿用 Codex 的有效配置'], ...models.filter(m => modelName(m.model)).map(m => [m.model, String(m.displayName || m.model).slice(0, 150), '本机 Codex 模型目录；访问权限以实际调用为准'])];
             if (info.configuredModel && !info.models.some(m => m[0] === info.configuredModel)) info.models.push([info.configuredModel, info.configuredModel, '本机配置模型']);
           }
@@ -67,7 +69,7 @@ export class AgentRuntime {
   }
   snapshot() { return { catalog: this.catalog, runs: [...this.runs.values()].map(run => this.publicRun(run)) }; }
   publicRun(run) {
-    const { child, killTimer, publishTimer, texts, currentMessage, ...value } = run; return value;
+    const { child, killTimer, publishTimer, texts, currentMessage, reasoningItems, ...value } = run; return value;
   }
   publish(run) {
     if (run.texts) run.text = [...run.texts.values()].filter(Boolean).join('\n\n').slice(0, 2 * 1024 * 1024);
@@ -78,17 +80,32 @@ export class AgentRuntime {
     run.texts.set(id, ((append ? run.texts.get(id) || '' : '') + text).slice(0, 2 * 1024 * 1024));
     if (!run.publishTimer) run.publishTimer = setTimeout(() => { run.publishTimer = null; this.publish(run); }, 60);
   }
+  reasoning(run, id, text, append = false) {
+    if (typeof text !== 'string') return;
+    const values = run.reasoning || [], previous = values.find(value => value.id === id);
+    const value = { id, text: ((append ? previous?.text || '' : '') + text).slice(0, 128 * 1024) };
+    run.reasoning = (previous ? values.map(item => item.id === id ? value : item) : [...values, value]).slice(0, 128);
+    if (!run.publishTimer) run.publishTimer = setTimeout(() => { run.publishTimer = null; this.publish(run); }, 60);
+  }
+  reasoningActivity(run, id, active) {
+    const wasActive = run.reasoningActive;
+    run.reasoningItems ||= new Set();
+    if (active) run.reasoningItems.add(id); else run.reasoningItems.delete(id);
+    run.reasoningActive = run.reasoningItems.size > 0; if (wasActive !== run.reasoningActive) this.publish(run);
+  }
   finish(run, status, error = '') {
     if (!busy(run)) return;
     clearTimeout(run.publishTimer); run.publishTimer = null;
     run.status = status; run.error = redactError(error, this.redactionEnv); if (!error) run.error = '';
     if (run.agent === 'Claude' && /\b402\b|Insufficient Balance/i.test(run.error)) run.error = '本机 Claude 配置的服务余额不足（402），请检查当前服务账户后重试。\n' + run.error;
     run.completedAt = stamp();
+    run.reasoningActive = false; run.reasoningItems?.clear();
     for (const [token, pending] of this.pending) if (pending.run === run) this.pending.delete(token);
     delete run.request; delete run.requests; this.publish(run);
   }
   start(args) { const next = this.startQueue.then(() => this.prepareStart(args)); this.startQueue = next.catch(() => {}); return next; }
   async prepareStart({ sessionId, prompt, requestId }) {
+    if (this.capabilitiesBusy) throw new Error('正在更新 Agent 扩展配置，请完成后再开始执行');
     if (typeof sessionId !== 'string' || typeof prompt !== 'string' || !prompt.trim() || prompt.length > 6000) throw new Error('无效的会话输入');
     if (requestId !== undefined && !/^[a-zA-Z0-9-]{1,100}$/.test(requestId)) throw new Error('无效的执行标识');
     if (this.detecting) await this.detecting;
@@ -113,23 +130,36 @@ export class AgentRuntime {
     cwd = await fs.realpath(cwd);
     if (requestId && this.cancelled.has(requestId)) throw new Error('本轮已停止');
     const previous = session.runtime;
-    const externalId = previous?.agent === agent && previous.cwd === cwd && previous.status !== 'handedOff' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/.test(previous.externalId || '') ? previous.externalId : null;
+    let externalId = previous?.agent === agent && previous.cwd === cwd && previous.status !== 'handedOff' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/.test(previous.externalId || '') ? previous.externalId : null;
     const requestedModel = session.model || 'system';
     const executionModel = externalId && requestedModel === 'system' ? (previous?.requestedModel === 'system' ? modelName(previous.model) : tool.configuredModel) || 'system' : requestedModel;
     const rule = previous?.ruleSnapshot || data.ruleHistory?.find(r => r.version === session.ruleVersion && r.body)?.body || '';
     const planning = session.agentSettingsSnapshot?.executionMode === '仅规划' || data.preferences?.local === false;
+    const settings = session.agentSettingsSnapshot || {}, effort = settings.reasoningEffort || 'system', reviewer = settings.approvalsReviewer || 'system', permission = settings.permissionMode || 'system';
+    const selectedModel = executionModel === 'system' ? tool.configuredModel : executionModel;
+    const efforts = tool.reasoningEfforts?.[selectedModel] || (agent === 'Claude' ? tool.reasoningEfforts?.['*'] : null) || [];
+    if (effort !== 'system' && (!tool.capabilities?.effort || !efforts.includes(effort))) throw new Error('本机工具或当前模型不支持此推理强度，请重新选择');
+    if (agent === 'Codex' && (!['system', 'user', 'auto_review'].includes(reviewer) || (reviewer === 'auto_review' && !tool.capabilities?.autoReview) || (reviewer === 'user' && !tool.capabilities?.reviewer))) throw new Error('本机 Codex 不支持此授权审核设置');
+    if (agent === 'Claude' && (!['system', 'manual', 'acceptEdits', 'auto', 'plan'].includes(permission) || (permission !== 'system' && !tool.capabilities?.permissionModes?.includes(permission)) || (planning && !tool.capabilities?.permissionModes?.includes('plan')))) throw new Error('本机 Claude 不支持此权限模式');
+    const configuredEffort = tool.configuredReasoningEffort && (!efforts.length || efforts.includes(tool.configuredReasoningEffort)) ? tool.configuredReasoningEffort : tool.defaultReasoningEfforts?.[selectedModel];
+    const reasoningEffort = effort === 'system' ? (agent === 'Codex' && tool.capabilities?.effort ? configuredEffort : null) : effort;
+    const resetReasoning = agent === 'Codex' && effort === 'system' && !reasoningEffort && externalId && previous.requestedReasoningEffort && previous.requestedReasoningEffort !== 'system';
+    if (resetReasoning) externalId = null;
+    const approvalsReviewer = agent === 'Codex' && tool.capabilities?.reviewer ? (reviewer === 'system' ? tool.configuredApprovalsReviewer || 'user' : reviewer) : null;
+    const permissionMode = planning ? 'plan' : permission === 'system' ? null : permission;
     const instructions = [coreInstructions, rule.slice(0, 12000), session.agentSettingsSnapshot?.instructions || '', planning ? '本轮仅规划，不修改文件。' : ''].filter(Boolean).join('\n\n');
     const history = session.messages.filter(m => ['我', 'Codex', 'Claude', 'Gemini'].includes(m.who)).slice(-20).slice(0, -1).map(m => `${m.who}: ${m.text}`).join('\n\n').slice(-40000);
     const recoveryText = history ? `工作台中的既有会话记录：\n${history}\n\n用户本轮请求：\n${prompt}` : prompt;
     const text = externalId ? prompt : recoveryText;
-    const run = { id: requestId || randomUUID(), sessionId, agent, requestedModel, model: executionModel === 'system' ? tool.configuredModel : executionModel, cwd, externalId, ruleSnapshot: rule, status: 'starting', text: '', texts: new Map(), events: [], startedAt: stamp(), error: '' };
+    if (this.capabilitiesBusy) throw new Error('正在更新 Agent 扩展配置，请完成后再开始执行');
+    const run = { id: requestId || randomUUID(), sessionId, agent, requestedModel, requestedReasoningEffort: effort, reasoningEffort: reasoningEffort || null, approvalsReviewer, model: executionModel === 'system' ? tool.configuredModel : executionModel, cwd, externalId, ruleSnapshot: rule, status: 'starting', text: '', texts: new Map(), reasoning: [], reasoningActive: false, events: resetReasoning ? ['工具未提供默认推理强度，已从工作台记录重新建立上下文以恢复工具默认。'] : [], startedAt: stamp(), error: '' };
     this.runs.set(sessionId, run);
     for (const [key, value] of this.runs) if (this.runs.size > 64 && !busy(value)) this.runs.delete(key);
     this.publish(run);
-    (agent === 'Codex' ? this.codexRun(run, { text, recoveryText, instructions, planning, model: executionModel }) : this.claudeRun(run, { text, instructions, planning, model: executionModel, executable: tool.executable })).catch(error => this.finish(run, 'failed', error.message));
+    (agent === 'Codex' ? this.codexRun(run, { text, recoveryText, instructions, planning, model: executionModel, reasoningEffort, approvalsReviewer }) : this.claudeRun(run, { text, instructions, model: executionModel, reasoningEffort, permissionMode, executable: tool.executable })).catch(error => this.finish(run, 'failed', error.message));
     return this.publicRun(run);
   }
-  async codexRun(run, { text, recoveryText, instructions, planning, model }) {
+  async codexRun(run, { text, recoveryText, instructions, planning, model, reasoningEffort, approvalsReviewer }) {
     if (!this.rpc) throw new Error('Codex 连接已断开，请重新检测');
     const options = { cwd: run.cwd, ...(model && model !== 'system' ? { model } : {}), ...(planning ? { sandbox: 'read-only' } : {}) };
     let result;
@@ -143,7 +173,7 @@ export class AgentRuntime {
     run.externalId = result.thread.id; run.model = result.model || run.model;
     if (run.status === 'stopping') return this.finish(run, 'interrupted');
     run.status = 'running'; this.publish(run);
-    const started = await this.rpc.request('turn/start', { threadId: run.externalId, input: [{ type: 'text', text }], ...(model && model !== 'system' ? { model } : {}) }, 30000);
+    const started = await this.rpc.request('turn/start', { threadId: run.externalId, input: [{ type: 'text', text }], ...(model && model !== 'system' ? { model } : {}), ...(reasoningEffort ? { effort: reasoningEffort } : {}), ...(approvalsReviewer ? { approvalsReviewer } : {}) }, 30000);
     run.turnId = started.turn.id;
     if (run.status === 'stopping') await this.rpc.request('turn/interrupt', { threadId: run.externalId, turnId: run.turnId });
     this.publish(run);
@@ -161,12 +191,20 @@ export class AgentRuntime {
       run.status = 'waiting'; this.publish(run); return;
     }
     if (!run) return;
+    if (p.turnId && run.turnId && p.turnId !== run.turnId) return;
     if (message.method === 'item/agentMessage/delta') this.text(run, p.itemId || 'response', p.delta || '', true);
+    if (message.method === 'item/reasoning/summaryTextDelta') { this.reasoningActivity(run, p.itemId, true); this.reasoning(run, `${p.itemId}:${p.summaryIndex || 0}`, p.delta || '', true); }
+    if (message.method === 'item/reasoning/summaryPartAdded') this.reasoningActivity(run, p.itemId, true);
     if (message.method === 'item/started') {
+      if (p.item?.type === 'reasoning') this.reasoningActivity(run, p.item.id, true);
       if (p.item?.type === 'commandExecution') this.note(run, '运行命令：' + p.item.command);
       if (p.item?.type === 'fileChange') this.note(run, '正在处理文件变更');
     }
     if (message.method === 'item/completed' && p.item?.type === 'agentMessage') this.text(run, p.item.id, p.item.text || '');
+    if (message.method === 'item/completed' && p.item?.type === 'reasoning') {
+      for (const [index, text] of (Array.isArray(p.item.summary) ? p.item.summary : []).entries()) this.reasoning(run, `${p.item.id}:${index}`, text);
+      this.reasoningActivity(run, p.item.id, false);
+    }
     if (message.method === 'error') this.note(run, p.error?.message || '工具报告错误');
     if (message.method === 'turn/completed') this.finish(run, p.turn.status === 'completed' ? 'completed' : p.turn.status === 'interrupted' ? 'interrupted' : 'failed', p.turn.error?.message || '');
   }
@@ -184,11 +222,12 @@ export class AgentRuntime {
     if (!pending.run.requests.length) { delete pending.run.requests; delete pending.run.request; }
     pending.run.status = pending.run.request ? 'waiting' : 'running'; this.publish(pending.run);
   }
-  async claudeRun(run, { text, instructions, planning, model, executable }) {
+  async claudeRun(run, { text, instructions, model, executable, reasoningEffort, permissionMode }) {
     const args = ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--append-system-prompt', instructions];
     if (run.externalId) args.push('--resume', run.externalId);
     if (model && model !== 'system') args.push('--model', model);
-    if (planning) args.push('--permission-mode', 'plan');
+    if (reasoningEffort) args.push('--effort', reasoningEffort);
+    if (permissionMode) args.push('--permission-mode', permissionMode);
     const child = spawn(executable, args, { cwd: run.cwd, env: this.env, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32', windowsHide: true }); run.child = child;
     run.status = 'running'; this.publish(run); let result;
     let stderr = ''; child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-6000); });
@@ -203,10 +242,15 @@ export class AgentRuntime {
         const value = event.event;
         if (value?.type === 'message_start') run.currentMessage = value.message?.id || 'response';
         if (value?.delta?.type === 'text_delta') this.text(run, run.currentMessage || 'response', value.delta.text, true);
+        const reasoningId = `${run.currentMessage || 'response'}:${value?.index || 0}`;
+        if (value?.type === 'content_block_start' && value.content_block?.type === 'thinking') { this.reasoningActivity(run, reasoningId, true); if (value.content_block.thinking) this.reasoning(run, reasoningId, value.content_block.thinking); }
+        if (value?.delta?.type === 'thinking_delta') { this.reasoningActivity(run, reasoningId, true); this.reasoning(run, reasoningId, value.delta.thinking, true); }
+        if (value?.type === 'content_block_stop') this.reasoningActivity(run, reasoningId, false);
       }
       if (event.type === 'assistant') {
         const parts = event.message?.content || [], value = parts.filter(b => b.type === 'text').map(b => b.text).join('\n');
         if (value) this.text(run, event.message.id || run.currentMessage || 'response', value);
+        for (const [index, part] of parts.entries()) if (part.type === 'thinking') { const id = `${event.message.id || run.currentMessage || 'response'}:${index}`; this.reasoning(run, id, part.thinking); this.reasoningActivity(run, id, false); }
         for (const tool of parts.filter(b => b.type === 'tool_use')) this.note(run, '调用工具：' + tool.name);
       }
       if (event.type === 'system' && event.subtype === 'api_retry') this.note(run, '服务重试：' + (event.error || event.error_status || '连接暂时不可用'));

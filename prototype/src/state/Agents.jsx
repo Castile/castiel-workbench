@@ -6,6 +6,12 @@ import { RequestCard } from '../chat/RequestCard';
 const Context = createContext(null);
 export const runBusy = run => ['starting','running','waiting','stopping'].includes(run?.status);
 export const runStatus = { starting:'正在连接',running:'执行中',waiting:'等待确认',stopping:'正在停止',completed:'本轮完成',blocked:'已阻塞',failed:'执行失败',interrupted:'已停止' };
+export function applyRunToRecord(record,run){
+  const messageId='run-'+run.id,existing=record.messages.findIndex(message=>message.runId===messageId);
+  const message={who:run.agent,time:runBusy(run)?'正在输出…':'真实运行',text:run.text||'',runId:messageId,model:run.model||'本机默认',agent:run.agent,reasoning:run.reasoning||[],reasoningActive:Boolean(run.reasoningActive),runStatus:run.status};
+  const messages=existing<0?[...record.messages,message]:record.messages.map((value,index)=>index===existing?message:value);
+  return {...record,messages,status:runStatus[run.status]||'待开始',runtime:run};
+}
 export function AgentsProvider({ children }) {
   const native = window.castielDesktop;
   const [state, setState] = useState({ catalog:{checking:Boolean(native),agents:{}},runs:[],loaded:!native,error:'' });
@@ -32,14 +38,10 @@ export function useAgentRecords(records,setRecords){
         const run=agents.runs.find(r=>r.sessionId===row.id);
         if(run&&row.runtime?.id!==run.id&&row.runtime?.startedAt>=run.startedAt)continue;
         if(run&&(row.agent!==run.agent||(row.runtime?.id===run.id&&row.runtime.status==='handedOff')))continue;
-        if(!run){if(runBusy(row.runtime))next=updateRecord(next,row.id,t=>({...t,status:'已中断',runtime:{...t.runtime,status:'interrupted',error:'上次运行已中断；输出已保留，可继续发送。'}}));continue;}
-        const previous=row.runtime, messageId='run-'+run.id;
+        if(!run){if(runBusy(row.runtime))next=updateRecord(next,row.id,t=>applyRunToRecord(t,{...t.runtime,status:'interrupted',reasoningActive:false,error:'上次运行已中断；输出已保留，可继续发送。'}));continue;}
+        const previous=row.runtime;
         if(previous && JSON.stringify(previous)===JSON.stringify(run))continue;
-        next=updateRecord(next,row.id,t=>{
-          const messages=t.messages.filter(m=>m.runId!==messageId);
-          if(run.text)messages.push({who:run.agent,time:runBusy(run)?'正在输出…':'真实回复',text:run.text,runId:messageId,model:run.model||'本机默认',agent:run.agent});
-          return {...t,messages,status:runStatus[run.status]||'待开始',runtime:run};
-        });
+        next=updateRecord(next,row.id,t=>applyRunToRecord(t,run));
       }
       return next;
     });

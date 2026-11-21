@@ -1,4 +1,4 @@
-import { agentDefaults } from '../agentData.js';
+import { agentDefaults, snapshotAgentSettings } from '../agentData.js';
 import { presentRecords, updateRecord } from './records.js';
 
 const busy = runtime => ['starting','running','waiting','stopping'].includes(runtime?.status);
@@ -6,7 +6,7 @@ export function createWorkspaceConversation({workspace,agent,model='system',sett
   if(!workspace?.id || !agent)throw new Error('请先选择 Agent 和工作空间');
   return {id:crypto.randomUUID(),title:'新对话',sessionKind:'agent',projectId:null,agent,model,
     workspaceId:workspace.id,workspaceSnapshot:{id:workspace.id,name:workspace.name,path:workspace.path},
-    agentSettingsSnapshot:{instructions:settings.instructions||'',executionMode:settings.executionMode||'自动执行'},
+    agentSettingsSnapshot:snapshotAgentSettings(settings),
     ruleVersion,status:'等待输入',date:new Date().toLocaleDateString('zh-CN',{month:'2-digit',day:'2-digit'}),messages:[],
     context:['等待输入',`工作空间：${workspace.name}`,'尚未执行工具或验证','输入消息后开始本次对话']};
 }

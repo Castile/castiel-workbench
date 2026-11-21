@@ -35,3 +35,25 @@ test('auto-discovery adds installed tools without overriding independent user se
  assert.equal(mergeDiscoveredAgents(next,catalog,initialSpaces),next);
  assert.equal(mergeDiscoveredAgents({},catalog,initialSpaces).Gemini,undefined);
 });
+
+test('retiring Gemini removes new-tool configuration without changing historical data or other Agent objects',async()=>{
+ const {retireGemini}=await import('../src/agentData.js');
+ const codex={enabled:false,defaultModel:'my-model'},claude={enabled:true};
+ const config={Codex:codex,Claude:claude,Gemini:{enabled:true}};
+ const next=retireGemini(config);
+ assert.equal(next.Gemini,undefined);assert.equal(next.Codex,codex);assert.equal(next.Claude,claude);
+ assert.equal(retireGemini(next),next);assert.ok(config.Gemini);
+});
+test('effort options resolve the effective model and discard unsupported or duplicated levels',async()=>{
+ const {getReasoningEfforts}=await import('../src/agentData.js');
+ const tool={configuredModel:'coding',reasoningEfforts:{coding:['low','high','high','bogus'],fast:['low']}};
+ assert.deepEqual(getReasoningEfforts(tool,'system'),['low','high']);
+ assert.deepEqual(getReasoningEfforts(tool,'fast'),['low']);assert.deepEqual(getReasoningEfforts(tool,'unknown'),[]);
+ assert.deepEqual(getReasoningEfforts({reasoningEfforts:{'*':['low','medium','high']}},'custom'),['low','medium','high']);
+});
+test('new session snapshots retain differentiated settings without copying unrelated fields',async()=>{
+ const {snapshotAgentSettings}=await import('../src/agentData.js');
+ const config={instructions:'keep scope',executionMode:'仅规划',reasoningEffort:'high',approvalsReviewer:'auto_review',permissionMode:'manual',private:'do-not-copy'};
+ assert.deepEqual(snapshotAgentSettings(config),{instructions:'keep scope',executionMode:'仅规划',reasoningEffort:'high',approvalsReviewer:'auto_review',permissionMode:'manual'});
+ assert.equal(snapshotAgentSettings({}).reasoningEffort,'system');
+});

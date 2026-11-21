@@ -8,6 +8,7 @@ import { LocalStore } from './store.mjs';
 import { assetPath, externalURL } from './assets.mjs';
 import { encodeDocument } from '../src/state/document.js';
 import { AgentRuntime } from './agents.mjs';
+import { CapabilityManager } from './capabilities.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.CASTIEL_DATA_DIR || path.join(app.getPath('appData'), 'CastielWorkbench');
 mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -47,12 +48,15 @@ else {
   });
   handle('storage:load', () => store.load());
   runtime = new AgentRuntime({ store, emit: event => { if (window && !window.isDestroyed()) window.webContents.send('agents:event', event); } });
+  const capabilities = new CapabilityManager({ store, runtime, dialog: { showOpenDialog: options => dialog.showOpenDialog(window, options) } });
   runtime.detect().catch(error => console.error('Agent discovery failed:', error.name));
   handle('agents:state', () => runtime.snapshot());
   handle('agents:detect', () => runtime.detect());
   handle('agents:start', args => runtime.start(args));
   handle('agents:stop', (sessionId, requestId) => runtime.stop(sessionId, requestId));
   handle('agents:answer', answer => runtime.answer(answer));
+  handle('agents:capabilities', args => capabilities.listCapabilities(args));
+  handle('agents:manage-capability', args => capabilities.manageCapability(args));
   handle('links:open', value => shell.openExternal(externalURL(value)));
   handle('clipboard:write', text => {
     if (typeof text !== 'string' || text.length > 2 * 1024 * 1024) throw new Error('复制内容无效或过大');
