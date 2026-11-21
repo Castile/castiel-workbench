@@ -6,10 +6,11 @@ temp=$(mktemp -d)
 mount="$temp/mount"
 app="$temp/Installed Castiel.app"
 export CASTIEL_DATA_DIR="$temp/Test Data"
+mounted=false
 pid=''
 cleanup() {
   if [[ -n "$pid" ]]; then kill "$pid" 2>/dev/null || true; fi
-  if mount | grep -Fq " on $mount ("; then hdiutil detach "$mount" || return; fi
+  if [[ "$mounted" == true ]]; then hdiutil detach "$mount" || return; fi
   rm -rf "$temp"
 }
 trap cleanup EXIT
@@ -17,11 +18,13 @@ trap cleanup EXIT
 hdiutil verify "$dmg"
 mkdir "$mount"
 hdiutil attach -readonly -nobrowse -mountpoint "$mount" "$dmg"
+mounted=true
 test "$(readlink "$mount/Applications")" = /Applications
 ditto "$mount/Castiel.app" "$app"
 hdiutil detach "$mount"
+mounted=false
 codesign --verify --deep --strict "$app"
-lipo -verify_arch "$(uname -m)" "$app/Contents/MacOS/Castiel"
+lipo "$app/Contents/MacOS/Castiel" -verify_arch "$(uname -m)"
 "$app/Contents/MacOS/Castiel" &
 pid=$!
 doc="$CASTIEL_DATA_DIR/workbench.json"
