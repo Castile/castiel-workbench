@@ -25,6 +25,18 @@ try {
   await page.getByLabel('角色',{exact:true}).fill('测试');
   await page.getByRole('button',{name:'保存成员'}).click();
   await page.getByRole('button',{name:'记事迹',exact:true}).click();
+  await page.getByLabel('事实经过').fill('内部仅用于核验的事迹');
+  await page.getByLabel('海报公开标题').fill('发布质量贡献');
+  await page.getByLabel('可公开的贡献与影响').fill('感谢提前验证兼容性');
+  await page.getByRole('button',{name:'保存事迹'}).click();
+  await page.getByRole('button',{name:'生成海报'}).click();
+  const download = page.getByRole('link',{name:'导出 PNG'});
+  await download.waitFor();
+  const encoded = await download.getAttribute('href');
+  assert.match(encoded,/^data:image\/png;base64,iVBOR/);
+  assert.equal(encoded,await page.getByAltText('将导出的表扬海报').getAttribute('src'));
+  await page.getByRole('button',{name:'完成',exact:true}).click();
+  await page.getByRole('button',{name:'记事迹',exact:true}).click();
   await page.getByLabel('事件属性').selectOption('black');
   await page.getByLabel('事迹标题').fill('复核发布检查');
   await page.getByLabel('事实经过').fill('脱敏验证记录');
