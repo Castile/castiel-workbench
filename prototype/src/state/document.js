@@ -37,7 +37,7 @@ export function validateData(data) {
       if (s.taskId !== null) linked.add(s.taskId);
     }
   }
-  for (const key of ['members', 'projects', 'spaces']) if (data[key]) collection(data[key], key);
+  for (const key of ['members', 'projects', 'spaces','plItems','plEvents','plSources','plCoaching','plGoals','plReviews']) if (data[key] !== undefined) collection(data[key], key);
   if (data.members && !data.members.some(member => member.id === 'me')) throw new Error('成员列表必须保留本人');
   if (data.spaces?.some(s => 'projectId' in s || typeof s.name !== 'string' || typeof s.path !== 'string')) throw new Error('工作空间只能独立绑定本地目录');
   if (data.theme && !['light', 'dark', 'system'].includes(data.theme)) throw new Error('无效的外观设置');

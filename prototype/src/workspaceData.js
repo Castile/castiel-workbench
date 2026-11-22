@@ -1,4 +1,14 @@
 export function todayISO(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
+// A calendar week stays fixed when a saved plan is reopened after a Monday.
+export function weekStart(offset = 0, now = new Date()) {
+  const date = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7 + offset * 7);
+  return date.toISOString().slice(0,10);
+}
+export function plannedWeek(task, now = new Date()) {
+  if (task.scheduledWeekStart) return Math.floor((Date.parse(task.scheduledWeekStart) - Date.parse(weekStart(0,now))) / 604800000);
+  return task.week === undefined ? 0 : task.week;
+}
 export const initialMembers = [
   {id:'li',name:'小李',role:'后端开发',skills:'支付、接口、数据库',capacity:40,absence:8,projects:['payments']},
   {id:'lin',name:'小林',role:'前端开发',skills:'交互、表单、可视化',capacity:40,absence:8,projects:['admin']},
@@ -15,7 +25,7 @@ export function enrichTasks(tasks){return tasks.map(t=>({...t,week:0,ruleVersion
 export function makeTask(title,extra={}){return {id:crypto.randomUUID(),title,status:'待规划',agent:'Codex',model:'system',date:todayISO().slice(5),owner:'me',effort:null,week:0,projectId:'personal',priority:'中',due:todayISO(),ruleVersion:'v1.2',messages:[],context:['等待规划与执行。','按任务范围选择资料。','尚未记录排除路径。','明确验收目标并开始执行。'],...extra};}
 export function extraTasks(){return [makeTask('日志补充',{id:'logs',owner:'li',effort:4,projectId:'payments',status:'已排队'}),makeTask('管理端表单',{id:'form',owner:'lin',effort:24,projectId:'admin',status:'执行中',agent:'Claude'}),makeTask('回归测试',{id:'test',owner:'chen',effort:20,projectId:'payments',status:'待规划'}),makeTask('下周需求评审',{id:'review',owner:'me',effort:18,projectId:'admin',status:'待规划',agent:'Claude'})];}
 export function loadFor(tasks,member,week=0,projectId='all'){
- const all=tasks.filter(t=>t.owner===member.id&&(t.week??0)===week&&t.status!=='已取消');
+ const all=tasks.filter(t=>t.owner===member.id&&plannedWeek(t)===week&&t.status!=='已取消');
  const scoped=all.filter(t=>projectId==='all'||t.projectId===projectId);
  const sum=ts=>ts.reduce((n,t)=>n+(typeof t.effort==='number'?t.effort:0),0);
  const capacity=Math.max(0,member.capacity-member.absence),hours=sum(all);

@@ -5,6 +5,10 @@ const invoke = async (name, ...args) => {
   return result.value;
 };
 contextBridge.exposeInMainWorld('castielDesktop', Object.freeze({
+  fetchSource: args => invoke('sources:fetch', args),
+  setSourceToken: args => invoke('sources:set-token', args),
+  polish: args => invoke('writing:polish', args),
+  cancelPolish: id => invoke('writing:cancel', id),
   load: () => invoke('storage:load'),
   save: (data, revision) => invoke('storage:save', data, revision),
   info: () => invoke('storage:info'),

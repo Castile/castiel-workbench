@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol, session, dialog, Menu, shell, clipboard } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, session, dialog, Menu, shell, clipboard, safeStorage } from 'electron';
 import fs from 'node:fs/promises';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
@@ -8,6 +8,8 @@ import { LocalStore } from './store.mjs';
 import { assetPath, externalURL } from './assets.mjs';
 import { encodeDocument } from '../src/state/document.js';
 import { AgentRuntime } from './agents.mjs';
+import { CompanySources } from './company-sources.mjs';
+import { polish } from './polish.mjs';
 import { CapabilityManager } from './capabilities.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.CASTIEL_DATA_DIR || path.join(app.getPath('appData'), 'CastielWorkbench');
@@ -57,6 +59,23 @@ else {
   handle('agents:answer', answer => runtime.answer(answer));
   handle('agents:capabilities', args => capabilities.listCapabilities(args));
   handle('agents:manage-capability', args => capabilities.manageCapability(args));
+  const sources = new CompanySources(store, safeStorage);
+  handle('sources:fetch', args => sources.read(args));
+  handle('sources:set-token', args => sources.setToken(args));
+  const edits = new Map();
+  const cancelEdits = () => { for (const controller of edits.values()) controller.abort(); };
+  app.on('will-quit', cancelEdits);
+  app.on('browser-window-created', (_event, created) => created.webContents.once('destroyed', cancelEdits));
+  handle('writing:polish', async args => {
+    if (!args || typeof args.requestId !== 'string' || args.requestId.length > 80 || edits.size >= 3 || edits.has(args.requestId)) throw new Error('请稍后再试');
+    const controller = new AbortController();
+    edits.set(args.requestId, controller);
+    try {
+      const {data} = await store.read(store.file);
+      return await polish(runtime, data, args, AbortSignal.any([controller.signal, AbortSignal.timeout(90000)]));
+    } finally { edits.delete(args.requestId); }
+  });
+  handle('writing:cancel', id => edits.get(id)?.abort());
   handle('links:open', value => shell.openExternal(externalURL(value)));
   handle('clipboard:write', text => {
     if (typeof text !== 'string' || text.length > 2 * 1024 * 1024) throw new Error('复制内容无效或过大');

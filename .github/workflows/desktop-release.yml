@@ -1,5 +1,11 @@
 name: Desktop release
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the verified installers to GitHub Releases
+        type: boolean
+        default: true
 permissions:
   contents: read
 concurrency:
@@ -27,6 +33,12 @@ jobs:
           node-version-file: .node-version
       - run: npm run setup
       - run: npm run desktop:package
+      - name: Verify packaged team workflow on macOS
+        if: runner.os == 'macOS'
+        run: node prototype/tests/pl-desktop.mjs "$(echo release/Castiel-darwin-*/Castiel.app/Contents/MacOS/Castiel)"
+      - name: Verify packaged team workflow on Windows
+        if: runner.os == 'Windows'
+        run: node prototype/tests/pl-desktop.mjs (Resolve-Path release/Castiel-win32-x64/Castiel.exe).Path
       - name: Create and test macOS disk image
         if: runner.os == 'macOS'
         run: |
@@ -47,6 +59,7 @@ jobs:
           retention-days: 2
 
   publish:
+    if: inputs.publish
     needs: build
     runs-on: ubuntu-latest
     permissions:
