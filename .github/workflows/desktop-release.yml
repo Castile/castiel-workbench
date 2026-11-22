@@ -1,5 +1,8 @@
 name: Desktop release
 on:
+  push:
+    branches: ['codex/pl-team-delivery']
+    paths: ['prototype/**', '.github/workflows/desktop-release.yml']
   workflow_dispatch:
     inputs:
       publish:
@@ -59,7 +62,7 @@ jobs:
           retention-days: 2
 
   publish:
-    if: inputs.publish
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
     needs: build
     runs-on: ubuntu-latest
     permissions:
